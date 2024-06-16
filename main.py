@@ -17,7 +17,7 @@ def get_actions():
 @AwSnapUtil.log_function
 def save_actions(actions):
     with open(ACTIONS_FILE, "w") as file:
-        json.dump("[]", file, indent=4)
+        json.dump(actions, file, indent=4)
 
 def merge_actions(actions, new_actions):
     if new_actions == None or not len(new_actions):
@@ -73,10 +73,10 @@ def main():
         'fulfilled_actions': str(fulfilled_action_ids)
     }
 
-    # Sending POST request and capturing the response
     response = requests.post(url, data=body_data)
     
-    remove_actions(actions, fulfilled_action_ids)
+    if response.status_code == 200:
+        actions = remove_actions(actions, fulfilled_action_ids)
     
     new_actions = AwSnapUtil.eval_message(response.text)
 
