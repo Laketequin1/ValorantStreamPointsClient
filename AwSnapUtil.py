@@ -63,7 +63,7 @@ def eval_message(message):
         warn(f"Message length is 0")
         return None
 
-def log_function(func):
+def log_function(func): # TODO add indents
     def wrapper(*args, **kwargs):
         if kwargs:
             print(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n")
