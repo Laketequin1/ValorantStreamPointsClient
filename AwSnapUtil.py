@@ -1,10 +1,17 @@
 import ast
 
 show_warnings = True
+show_verbose = False
+
+COLOR_RESET = "\033[0m"
+COLOR_CYAN = "\033[96m"
+COLOR_GREEN = "\033[92m"
+COLOR_YELLOW = "\033[93m"
+COLOR_RED = "\033[91m"
 
 def warn(message): # Displays warning/error messages
     if show_warnings == True: # If warning messages active
-        print(f"[WARNING] {message}") # Print warning message
+        print(f"{COLOR_RED}[WARNING] {message}{COLOR_RED}") # Print warning message
 
 def eval_message(message):
     """
@@ -55,3 +62,15 @@ def eval_message(message):
     else:
         warn(f"Message length is 0")
         return None
+
+def log_function(func):
+    def wrapper(*args, **kwargs):
+        if kwargs:
+            print(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n")
+        else:
+            print(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}\n")
+        result = func(*args, **kwargs)
+        print(f"{COLOR_GREEN}Result{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n")
+        return result
+    return wrapper
+
