@@ -4,6 +4,7 @@ import json
 import pygetwindow
 import pyautogui
 import time
+import pynput
 pyautogui.FAILSAFE = False
 
 import AwSnapUtil
@@ -14,6 +15,8 @@ VALORANT_TITLE = "VALORANT"
 
 IN_GAME_PIXEL = {"POS": (961, 131), "COLOUR": (240, 240, 240), "ABOVE_TOLERANCE": 15, "BELOW_TOLERANCE": 7}
 DEAD_PIXEL = {"POS": (30, 797), "COLOUR": (254, 254, 254), "ABOVE_TOLERANCE": 1, "BELOW_TOLERANCE": 20}
+
+keyboard_presser = pynput.keyboard.Controller()
 
 class ValorantInfo:
     alive_last_tick = False
@@ -59,8 +62,8 @@ class ValorantInfo:
 class Actions:
     @staticmethod
     def inspect_gun():
-        pyautogui.keyDown('y')
-        pyautogui.keyUp('y')
+        keyboard_presser.tap("y")
+        time.sleep(0.1)
         return True
 
     @classmethod
