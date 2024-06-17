@@ -25,7 +25,9 @@ def get_alive():
         return True
     return False
 
-def complete_action(action):
+class ItemActions:
+    @staticmethod
+    def do_something(cls):
         return True
 
 class ActionsHandler:
@@ -105,7 +107,7 @@ def main():
 
     actions_edited = False
     for action in ActionsHandler.get_actions():
-        result = complete_action(action)
+        result = ItemActions.do_something(action)
 
         if result:
             action["Fulfilled"] = 1
