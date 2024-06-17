@@ -1,4 +1,5 @@
 import ast
+import ctypes
 
 show_warnings = True
 show_verbose = False
@@ -8,6 +9,10 @@ COLOR_CYAN = "\033[96m"
 COLOR_GREEN = "\033[92m"
 COLOR_YELLOW = "\033[93m"
 COLOR_RED = "\033[91m"
+
+# WinAPI functions and structures for get_pixel_colour()
+user32 = ctypes.WinDLL('user32', use_last_error=True)
+gdi32 = ctypes.WinDLL('gdi32', use_last_error=True)
 
 def verbose(message):
     if show_verbose:
@@ -67,6 +72,20 @@ def eval_message(message):
         warn(f"Message length is 0")
         return None
 
+def get_pixel_colour(x, y):
+    # Create a device context (DC) for the entire screen
+    hdc_screen = user32.GetDC(None)
+
+    pixel = gdi32.GetPixel(hdc_screen, x, y)
+    r = pixel & 0x0000ff
+    g = (pixel & 0x00ff00) >> 8
+    b = (pixel & 0xff0000) >> 16
+    color = (r, g, b)
+
+    user32.ReleaseDC(None, hdc_screen)
+
+    return color
+
 def log_function(func): # TODO add indents
     def wrapper(*args, **kwargs):
         if kwargs:
@@ -77,4 +96,3 @@ def log_function(func): # TODO add indents
         verbose(f"{COLOR_GREEN}Result{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n")
         return result
     return wrapper
-

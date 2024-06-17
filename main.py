@@ -8,22 +8,26 @@ import AwSnapUtil
 AwSnapUtil.show_verbose = True
 
 ACTIONS_FILE = "actions.json"
-VALORANT_TITLE = "Valorant"
+VALORANT_TITLE = "VALORANT"
 
-def get_focused_window():
+def get_focused_window() -> str:
     return pygetwindow.getActiveWindow().title
 
-def get_ingame():
-    if (get_focused_window() == VALORANT_TITLE):
+def get_ingame() -> bool:
+    if (get_focused_window().upper() == VALORANT_TITLE):
         # TODO check if in the game
         return True
     return False
 
-def get_alive():
+def get_alive() -> bool:
     if (get_ingame()):
         # TODO check if alive
         return True
     return False
+
+print(AwSnapUtil.get_pixel_colour(20, 20))
+print(get_focused_window())
+exit()
 
 class ItemActions:
     @staticmethod
