@@ -3,7 +3,7 @@ import getpass
 import json
 
 import AwSnapUtil
-AwSnapUtil.show_verbose = False
+AwSnapUtil.show_verbose = True
 
 ACTIONS_FILE = "actions.json"
 

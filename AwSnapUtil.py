@@ -9,9 +9,13 @@ COLOR_GREEN = "\033[92m"
 COLOR_YELLOW = "\033[93m"
 COLOR_RED = "\033[91m"
 
-def warn(message): # Displays warning/error messages
-    if show_warnings == True: # If warning messages active
-        print(f"{COLOR_RED}[WARNING] {message}{COLOR_RED}") # Print warning message
+def verbose(message):
+    if show_verbose:
+        print(f"[INFO] {message}")
+
+def warn(message):
+    if show_warnings:
+        print(f"{COLOR_RED}[WARNING] {message}{COLOR_RED}")
 
 def eval_message(message):
     """
@@ -66,11 +70,11 @@ def eval_message(message):
 def log_function(func): # TODO add indents
     def wrapper(*args, **kwargs):
         if kwargs:
-            print(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n")
+            verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n")
         else:
-            print(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}\n")
+            verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}\n")
         result = func(*args, **kwargs)
-        print(f"{COLOR_GREEN}Result{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n")
+        verbose(f"{COLOR_GREEN}Result{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n")
         return result
     return wrapper
 
