@@ -1,70 +1,92 @@
 import requests
 import getpass
 import json
+import pygetwindow
+import time
 
 import AwSnapUtil
 AwSnapUtil.show_verbose = True
 
 ACTIONS_FILE = "actions.json"
+VALORANT_TITLE = "Valorant"
 
 def get_focused_window():
-    pass
+    return pygetwindow.getActiveWindow().title
+
+def get_ingame():
+    if (get_focused_window() == VALORANT_TITLE):
+        # TODO check if in the game
+        return True
+    return False
+
+def get_alive():
+    if (get_ingame()):
+        # TODO check if alive
+        return True
+    return False
 
 def complete_action(action):
-    return True
+        return True
 
-def get_actions():
-    with open(ACTIONS_FILE, "r") as file:
-        return json.load(file)
-
-@AwSnapUtil.log_function
-def save_actions(actions):
-    with open(ACTIONS_FILE, "w") as file:
-        json.dump(actions, file, indent=4)
-
-def merge_actions(actions, new_actions):
-    if new_actions == None or not len(new_actions):
-        return actions
-
-    existing_keys = {item["ActionID"] for item in actions}
-
-    for new_action in new_actions:
-        new_action_id = new_action.get("ActionID")
-        if new_action_id is not None and new_action_id not in existing_keys:
-            new_action["Fulfilled"] = 0
-            actions.append(new_action)
-            existing_keys.add(new_action_id)
-        
-    return actions
-
-@AwSnapUtil.log_function
-def remove_actions(actions, fulfilled_action_ids):
-    keep_actions = [action for action in actions if action.get("ActionID") not in fulfilled_action_ids]
-
-    if len(keep_actions) != len(actions):
-        save_actions(keep_actions)
-
-    return keep_actions
-
-@AwSnapUtil.log_function
-def get_fulfilled_action_ids(actions):
-    fulfilled_actions = []
+class ActionsHandler:
+    @classmethod
+    def get_saved(cls):
+        with open(ACTIONS_FILE, "r") as file:
+            cls.actions = json.load(file)
     
-    for action in actions:
-        fulfillment = action.get("Fulfilled")
-        if fulfillment == 1:
-            action_id = action.get("ActionID")
-            fulfilled_actions.append(action_id)
+    @classmethod
+    def get_actions(cls):
+        return cls.actions
 
-    return fulfilled_actions
+    @classmethod
+    @AwSnapUtil.log_function
+    def get_fulfilled_action_ids(cls):
+        fulfilled_actions = []
+        
+        for action in cls.actions:
+            fulfillment = action.get("Fulfilled")
+            if fulfillment == 1:
+                action_id = action.get("ActionID")
+                fulfilled_actions.append(action_id)
+
+        return fulfilled_actions
+
+    @classmethod
+    @AwSnapUtil.log_function
+    def save(cls):
+        with open(ACTIONS_FILE, "w") as file:
+            json.dump(cls.actions, file, indent=4)
+
+    @classmethod
+    def merge_new(cls, new_actions):
+        if new_actions is None or not len(new_actions):
+            return
+
+        existing_keys = {item["ActionID"] for item in cls.actions}
+
+        for new_action in new_actions:
+            new_action_id = new_action.get("ActionID")
+            if new_action_id is not None and new_action_id not in existing_keys:
+                new_action["Fulfilled"] = 0
+                cls.actions.append(new_action)
+                existing_keys.add(new_action_id)
+
+    @classmethod
+    @AwSnapUtil.log_function
+    def remove(cls, fulfilled_action_ids):
+        keep_actions = [action for action in cls.actions if action.get("ActionID") not in fulfilled_action_ids]
+
+        if len(keep_actions) != len(cls.actions):
+            cls.actions = keep_actions
+            cls.save()
 
 def main():
-    actions = get_actions()
+    ActionsHandler.get_saved()
 
     url = 'https://projectspace.nz/wrkvaxxi/ValorantStreamPoints/post/get_actions.php'
     password = getpass.getpass('Enter password: ')
 
-    fulfilled_action_ids = get_fulfilled_action_ids(actions)
+    fulfilled_action_ids = ActionsHandler.get_fulfilled_action_ids()
 
     # Data to be sent in the POST request
     body_data = {
@@ -75,14 +97,14 @@ def main():
     response = requests.post(url, data=body_data)
     
     if response.status_code == 200:
-        actions = remove_actions(actions, fulfilled_action_ids)
+        ActionsHandler.remove(fulfilled_action_ids)
     
     new_actions = AwSnapUtil.eval_message(response.text)
 
-    actions = merge_actions(actions, new_actions)
+    ActionsHandler.merge_new(new_actions)
 
     actions_edited = False
-    for action in actions:
+    for action in ActionsHandler.get_actions():
         result = complete_action(action)
 
         if result:
@@ -90,7 +112,7 @@ def main():
             actions_edited = True
     
     if actions_edited:
-        save_actions(actions)
+        ActionsHandler.save()
 
 if __name__ == '__main__':
     main()
