@@ -7,6 +7,9 @@ AwSnapUtil.show_verbose = True
 
 ACTIONS_FILE = "actions.json"
 
+def get_focused_window():
+    pass
+
 def complete_action(action):
     return True
 
@@ -23,7 +26,6 @@ def merge_actions(actions, new_actions):
     if new_actions == None or not len(new_actions):
         return actions
 
-    prev_actions = list(actions)
     existing_keys = {item["ActionID"] for item in actions}
 
     for new_action in new_actions:
@@ -32,9 +34,6 @@ def merge_actions(actions, new_actions):
             new_action["Fulfilled"] = 0
             actions.append(new_action)
             existing_keys.add(new_action_id)
-
-    if prev_actions != actions:
-        save_actions(actions)
         
     return actions
 
@@ -91,7 +90,7 @@ def main():
             actions_edited = True
     
     if actions_edited:
-        save_actions(actions)    
+        save_actions(actions)
 
 if __name__ == '__main__':
     main()
