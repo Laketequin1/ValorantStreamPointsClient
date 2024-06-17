@@ -1,8 +1,10 @@
 import ast
-import ctypes
+import win32gui
+import win32ui
+import win32con
+import time
 
-show_warnings = True
-show_verbose = False
+verbose_level = 1
 
 COLOR_RESET = "\033[0m"
 COLOR_CYAN = "\033[96m"
@@ -10,16 +12,12 @@ COLOR_GREEN = "\033[92m"
 COLOR_YELLOW = "\033[93m"
 COLOR_RED = "\033[91m"
 
-# WinAPI functions and structures for get_pixel_colour()
-user32 = ctypes.WinDLL('user32', use_last_error=True)
-gdi32 = ctypes.WinDLL('gdi32', use_last_error=True)
-
-def verbose(message):
-    if show_verbose:
+def verbose(message, level):
+    if verbose_level >= level:
         print(f"[INFO] {message}")
 
 def warn(message):
-    if show_warnings:
+    if verbose_level >= 1:
         print(f"{COLOR_RED}[WARNING] {message}{COLOR_RED}")
 
 def eval_message(message):
@@ -72,27 +70,37 @@ def eval_message(message):
         warn(f"Message length is 0")
         return None
 
-def get_pixel_colour(x, y):
-    # Create a device context (DC) for the entire screen
-    hdc_screen = user32.GetDC(None)
+def get_pixel_colour(pixel_pos):
+    hwnd = win32gui.GetDesktopWindow()
+    wDC = win32gui.GetWindowDC(hwnd)
+    dcObj = win32ui.CreateDCFromHandle(wDC)
+    cDC = dcObj.CreateCompatibleDC()
+    dataBitMap = win32ui.CreateBitmap()
+    dataBitMap.CreateCompatibleBitmap(dcObj, 1, 1)
+    cDC.SelectObject(dataBitMap)
+    cDC.BitBlt((0, 0), (1, 1), dcObj, pixel_pos, win32con.SRCCOPY)
+    b, g, r = dataBitMap.GetBitmapBits(True)[:3]
+    win32gui.DeleteObject(dataBitMap.GetHandle())
+    dcObj.DeleteDC()
+    cDC.DeleteDC()
+    win32gui.ReleaseDC(hwnd, wDC)
+    return (r, g, b)
 
-    pixel = gdi32.GetPixel(hdc_screen, x, y)
-    r = pixel & 0x0000ff
-    g = (pixel & 0x00ff00) >> 8
-    b = (pixel & 0xff0000) >> 16
-    color = (r, g, b)
+# TODO add indents
+def log_function(level):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            #if kwargs:
+            #    verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n", level)
+            #else:
+            #    verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}\n", level)
 
-    user32.ReleaseDC(None, hdc_screen)
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            execution_time_ms = (end_time - start_time) * 1000
 
-    return color
-
-def log_function(func): # TODO add indents
-    def wrapper(*args, **kwargs):
-        if kwargs:
-            verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}, {kwargs}\n")
-        else:
-            verbose(f"{COLOR_CYAN}Called{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {args}\n")
-        result = func(*args, **kwargs)
-        verbose(f"{COLOR_GREEN}Result{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n")
-        return result
-    return wrapper
+            verbose(f"{COLOR_GREEN}{round(execution_time_ms, 5)}ms{COLOR_RESET} {COLOR_YELLOW}{func.__name__}{COLOR_RESET}: {result}\n", level)
+            return result
+        return wrapper
+    return decorator
