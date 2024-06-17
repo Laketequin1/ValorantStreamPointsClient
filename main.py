@@ -10,6 +10,8 @@ pyautogui.FAILSAFE = False
 import AwSnapUtil
 AwSnapUtil.verbose_level = 2
 
+TICK_SPEED = 0.05
+
 ACTIONS_FILE = "actions.json"
 VALORANT_TITLE = "VALORANT"
 
@@ -62,7 +64,7 @@ class ValorantInfo:
 class Actions:
     @staticmethod
     def inspect_gun():
-        keyboard_presser.tap("y")
+        keyboard_presser.tap("y") # CREATE MAX EXECUTIONS PER TICK
         time.sleep(0.1)
         return True
 
@@ -185,7 +187,7 @@ def main():
         if actions_executed or edit_made:
             ActionsHandler.save()
 
-        time.sleep(0.05)
+        time.sleep(TICK_SPEED)
 
 if __name__ == '__main__':
     main()
