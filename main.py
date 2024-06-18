@@ -64,14 +64,18 @@ class ValorantInfo:
 class Actions:
     @staticmethod
     def inspect_gun():
-        keyboard_presser.tap("y") # CREATE MAX EXECUTIONS PER TICK
-        time.sleep(0.1)
+        keyboard_presser.tap("y")
+        return True
+    
+    @staticmethod
+    def jump():
+        keyboard_presser.tap(" ")
         return True
 
     @classmethod
     @AwSnapUtil.log_function(2)
     def execute_action(self, action):
-        action_function_name = action["Action"].lower().strip().replace(" ", "_").replace("+", "_")
+        action_function_name = action["Name"].lower().strip().replace(" ", "_").replace("+", "_")
 
         # DISPLAY USERS NAME
 
@@ -88,16 +92,18 @@ class Actions:
     @classmethod
     @AwSnapUtil.log_function(3)
     def execute_actions(self):
-        actions_executed = False
+        executed_actions = []
+
         if ValorantInfo.get_alive():
             for action in ActionsHandler.get_actions():
-                result = Actions.execute_action(action)
+                if action["Name"] not in executed_actions:
+                    result = Actions.execute_action(action)
 
-                if result:
-                    action["Fulfilled"] = 1
-                    actions_executed = True
+                    if result:
+                        action["Fulfilled"] = 1
+                        executed_actions.append(action["Name"])
         
-        return actions_executed
+        return bool(executed_actions)
 
 class ActionsHandler:
     @classmethod
@@ -181,6 +187,9 @@ def main():
         new_actions = AwSnapUtil.eval_message(response.text)
 
         edit_made = ActionsHandler.merge_new(new_actions)
+
+        if edit_made:
+            print(new_actions)
 
         actions_executed = Actions.execute_actions()
         
