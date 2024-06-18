@@ -88,7 +88,11 @@ class Actions():
     def crouch():
         crouch_thread = threading.Thread(target=ActionsDependancies.hold_button, args=(events, keyboard_presser, 10, pynput.keyboard.Key.ctrl))
         crouch_thread.start()
-
+        return True
+    
+    @staticmethod
+    def drop_gun():
+        keyboard_presser.tap("g")
         return True
 
 

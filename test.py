@@ -1,33 +1,81 @@
-import win32gui
-import win32ui
-import win32con
+import pyaudio
+import wave
+import numpy as np
+import threading
 import time
 
-def get_pixel_colour(pixel_pos):
-    hwnd = win32gui.GetDesktopWindow()
-    wDC = win32gui.GetWindowDC(hwnd)
-    dcObj = win32ui.CreateDCFromHandle(wDC)
-    cDC = dcObj.CreateCompatibleDC()
-    dataBitMap = win32ui.CreateBitmap()
-    dataBitMap.CreateCompatibleBitmap(dcObj, 1, 1)
-    cDC.SelectObject(dataBitMap)
-    cDC.BitBlt((0, 0), (1, 1), dcObj, pixel_pos, win32con.SRCCOPY)
-    b, g, r = dataBitMap.GetBitmapBits(True)[:3]
-    win32gui.DeleteObject(dataBitMap.GetHandle())
-    dcObj.DeleteDC()
-    cDC.DeleteDC()
-    win32gui.ReleaseDC(hwnd, wDC)
-    return (r, g, b)
+# Function to play audio with volume control
+def play_audio_with_fadeout(file_path, duration):
+    # Open the audio file
+    wf = wave.open(file_path, 'rb')
 
-# Timing the function execution
-start_time = time.time()
+    # Create a PyAudio instance
+    p = pyaudio.PyAudio()
 
-for _ in range(100):
-    get_pixel_colour((27, 436))
+    # Open a stream
+    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                    channels=wf.getnchannels(),
+                    rate=wf.getframerate(),
+                    output=True)
 
-end_time = time.time()
+    # Total number of frames
+    total_frames = wf.getnframes()
+    # Frames per second
+    frame_rate = wf.getframerate()
 
-# Calculate the elapsed time
-elapsed_time = end_time - start_time
+    # Buffer size
+    buffer_size = 1024
 
-print(f"Time taken to run the function 100 times: {elapsed_time} seconds")
+    # Start the stream
+    stream.start_stream()
+
+    # Calculate the volume reduction per second
+    fade_out_per_second = 1.0 / duration
+    volume = 1.0
+
+    # Function to fade out the volume
+    def fade_out():
+        nonlocal volume
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            elapsed_time = time.time() - start_time
+            volume = max(0.0, pow(1.3, -(elapsed_time + 1.2)) - (0.25/60) * elapsed_time + 0.25)
+            time.sleep(0.1)
+            print(round(elapsed_time), round(volume, 4))
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+
+    # Create a thread for the fade-out function
+    fade_out_thread = threading.Thread(target=fade_out)
+    fade_out_thread.start()
+
+    # Read and play audio data
+    while stream.is_active():
+        data = wf.readframes(buffer_size)
+        if len(data) == 0:
+            break
+
+        # Convert audio data to numpy array
+        audio_data = np.frombuffer(data, dtype=np.int16)
+        # Apply volume
+        audio_data = (audio_data * volume).astype(np.int16)
+        # Write audio data to stream
+        stream.write(audio_data.tobytes())
+
+    # Wait for fade out to complete
+    fade_out_thread.join()
+
+    # Stop and close the stream
+    stream.stop_stream()
+    stream.close()
+    # Close PyAudio
+    p.terminate()
+    # Close the audio file
+    wf.close()
+
+# Path to the audio file
+audio_file = 'Audio/Rick Roll.wav'
+
+# Play the audio file with fade out over 45 seconds
+play_audio_with_fadeout(audio_file, 60)
