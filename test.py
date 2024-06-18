@@ -37,7 +37,7 @@ def play_audio_with_fadeout(file_path, duration):
         start_time = time.time()
         while time.time() - start_time < duration:
             elapsed_time = time.time() - start_time
-            volume = max(0.0, pow(1.3, -(elapsed_time + 1.2)) - (0.15/60) * elapsed_time + 0.15)
+            volume = max(0.0, pow(1.5, -(elapsed_time + 1)) - (0.022/60) * elapsed_time + 0.022)
             time.sleep(0.1)
             print(round(elapsed_time), round(volume, 4))
         stream.stop_stream()
