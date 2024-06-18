@@ -29,8 +29,6 @@ def play_audio_with_fadeout(file_path, duration):
     # Start the stream
     stream.start_stream()
 
-    # Calculate the volume reduction per second
-    fade_out_per_second = 1.0 / duration
     volume = 1.0
 
     # Function to fade out the volume
@@ -39,7 +37,7 @@ def play_audio_with_fadeout(file_path, duration):
         start_time = time.time()
         while time.time() - start_time < duration:
             elapsed_time = time.time() - start_time
-            volume = max(0.0, pow(1.3, -(elapsed_time + 1.2)) - (0.25/60) * elapsed_time + 0.25)
+            volume = max(0.0, pow(1.3, -(elapsed_time + 1.2)) - (0.15/60) * elapsed_time + 0.15)
             time.sleep(0.1)
             print(round(elapsed_time), round(volume, 4))
         stream.stop_stream()
