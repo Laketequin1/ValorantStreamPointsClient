@@ -7,6 +7,8 @@ import threading
 import atexit
 import time
 import pynput
+import sys
+import math
 pyautogui.FAILSAFE = False
 
 import AwSnapUtil
@@ -22,8 +24,10 @@ DEAD_PIXEL = {"POS": (30, 797), "COLOUR": (254, 254, 254), "ABOVE_TOLERANCE": 1,
 
 keyboard_presser = pynput.keyboard.Controller()
 
+events = {"EXIT": threading.Event(), "is_alive": threading.Event()}
+
 def EXIT():
-    print("Cleanup function called before exit.")
+    events["EXIT"].set()
 
 atexit.register(EXIT)
 
@@ -82,9 +86,8 @@ class Actions():
     
     @staticmethod
     def crouch():
-        thread_set = threading.Thread(target=ActionsDependancies.)
-        thread_set.start()
-        thread_clear.start()
+        crouch_thread = threading.Thread(target=ActionsDependancies.hold_button, args=(events, keyboard_presser, 10, pynput.keyboard.Key.ctrl))
+        crouch_thread.start()
 
         return True
 
@@ -111,12 +114,12 @@ class ActionsDependancies:
     
     @classmethod
     @AwSnapUtil.log_function(3)
-    def execute_actions(cls):
+    def execute_actions(cls, is_alive):
         executed_actions = []
 
         current_time = time.time()
 
-        if ValorantInfo.get_alive():
+        if is_alive:
             for action in ActionsHandler.get_actions():
                 if action["Name"] not in executed_actions and (action["Name"] not in cls.actions_next_execute_time or current_time > cls.actions_next_execute_time[action["Name"]]):
                     result = cls.execute_action(action)
@@ -132,19 +135,40 @@ class ActionsDependancies:
         return bool(executed_actions)
     
     def hold_button(events, keyboard_presser, duration, key):
+        def exit_hold_button():
+            keyboard_presser.release(key)
+            return False
+
         keyboard_presser.press(key)
 
-        for _ in range(duration):
-            events["IsAlive"].wait(1)
+        is_alive = False
+        INTERVAL = 0.2
+
+        for _ in range(math.floor(duration / INTERVAL)):
             if events["EXIT"].is_set():
+                exit_hold_button()
 
-            while not events["IsAlive"].is_set():
-                events["IsAlive"].wait(1)
+            if not events["is_alive"].is_set():
+                keyboard_presser.release(key)
+                is_alive = False
 
-            #keyboard_presser.press(key)
+            while not is_alive:
+                time.sleep(INTERVAL)
+
+                if events["EXIT"].is_set():
+                    exit_hold_button()
+
+                if events["is_alive"].is_set():
+                    keyboard_presser.press(key)
+                    is_alive = True
+
+            keyboard_presser.press(key)
+
+            time.sleep(INTERVAL)
 
         keyboard_presser.release(key)
 
+        return True
 
 class ActionsHandler:
     @classmethod
@@ -209,6 +233,8 @@ class ActionsHandler:
 def main():
     ActionsHandler.get_saved()
 
+    is_alive = False
+
     url = 'https://projectspace.nz/wrkvaxxi/ValorantStreamPoints/post/get_actions.php'
     password = getpass.getpass('Enter password: ')
 
@@ -230,7 +256,15 @@ def main():
 
         edit_made = ActionsHandler.merge_new(new_actions)
 
-        actions_executed = ActionsDependancies.execute_actions()
+        if is_alive != ValorantInfo.get_alive():
+            is_alive = not is_alive
+
+            if is_alive:
+                events["is_alive"].set()
+            else:
+                events["is_alive"].clear()
+
+        actions_executed = ActionsDependancies.execute_actions(is_alive)
         
         if actions_executed or edit_made:
             ActionsHandler.save()
