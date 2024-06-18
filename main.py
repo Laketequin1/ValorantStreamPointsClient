@@ -62,6 +62,8 @@ class ValorantInfo:
                 return False
 
 class Actions:
+    actions_next_execute_time = {}
+
     @staticmethod
     def inspect_gun():
         keyboard_presser.tap("y")
@@ -74,13 +76,13 @@ class Actions:
 
     @classmethod
     @AwSnapUtil.log_function(2)
-    def execute_action(self, action):
+    def execute_action(cls, action):
         action_function_name = action["Name"].lower().strip().replace(" ", "_").replace("+", "_")
 
         # DISPLAY USERS NAME
 
-        if hasattr(self, action_function_name):
-            action_function = getattr(self, action_function_name)
+        if hasattr(cls, action_function_name):
+            action_function = getattr(cls, action_function_name)
         else:
             print(f"{action_function_name} does not exist as an available function")
             return True # TEMPOARY NEEDS CHANGED TO FALSE
@@ -91,16 +93,22 @@ class Actions:
     
     @classmethod
     @AwSnapUtil.log_function(3)
-    def execute_actions(self):
+    def execute_actions(cls):
         executed_actions = []
+
+        current_time = time.time()
 
         if ValorantInfo.get_alive():
             for action in ActionsHandler.get_actions():
-                if action["Name"] not in executed_actions:
+                if action["Name"] not in executed_actions and (action["Name"] not in cls.actions_next_execute_time or current_time > cls.actions_next_execute_time[action["Name"]]):
                     result = Actions.execute_action(action)
 
                     if result:
                         action["Fulfilled"] = 1
+
+                        if action["IntervalSeconds"] > 0:
+                            cls.actions_next_execute_time[action["Name"]] = current_time + action["IntervalSeconds"]
+
                         executed_actions.append(action["Name"])
         
         return bool(executed_actions)
@@ -187,9 +195,6 @@ def main():
         new_actions = AwSnapUtil.eval_message(response.text)
 
         edit_made = ActionsHandler.merge_new(new_actions)
-
-        if edit_made:
-            print(new_actions)
 
         actions_executed = Actions.execute_actions()
         
