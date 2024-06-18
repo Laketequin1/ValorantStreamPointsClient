@@ -3,6 +3,8 @@ import getpass
 import json
 import pygetwindow
 import pyautogui
+import threading
+import atexit
 import time
 import pynput
 pyautogui.FAILSAFE = False
@@ -19,6 +21,11 @@ IN_GAME_PIXEL = {"POS": (961, 131), "COLOUR": (240, 240, 240), "ABOVE_TOLERANCE"
 DEAD_PIXEL = {"POS": (30, 797), "COLOUR": (254, 254, 254), "ABOVE_TOLERANCE": 1, "BELOW_TOLERANCE": 20}
 
 keyboard_presser = pynput.keyboard.Controller()
+
+def EXIT():
+    print("Cleanup function called before exit.")
+
+atexit.register(EXIT)
 
 class ValorantInfo:
     alive_last_tick = False
@@ -61,9 +68,8 @@ class ValorantInfo:
             else:
                 return False
 
-class Actions:
-    actions_next_execute_time = {}
 
+class Actions():
     @staticmethod
     def inspect_gun():
         keyboard_presser.tap("y")
@@ -73,6 +79,18 @@ class Actions:
     def jump():
         keyboard_presser.tap(" ")
         return True
+    
+    @staticmethod
+    def crouch():
+        thread_set = threading.Thread(target=ActionsDependancies.)
+        thread_set.start()
+        thread_clear.start()
+
+        return True
+
+
+class ActionsDependancies:
+    actions_next_execute_time = {}
 
     @classmethod
     @AwSnapUtil.log_function(2)
@@ -81,8 +99,8 @@ class Actions:
 
         # DISPLAY USERS NAME
 
-        if hasattr(cls, action_function_name):
-            action_function = getattr(cls, action_function_name)
+        if hasattr(Actions, action_function_name):
+            action_function = getattr(Actions, action_function_name)
         else:
             print(f"{action_function_name} does not exist as an available function")
             return True # TEMPOARY NEEDS CHANGED TO FALSE
@@ -101,7 +119,7 @@ class Actions:
         if ValorantInfo.get_alive():
             for action in ActionsHandler.get_actions():
                 if action["Name"] not in executed_actions and (action["Name"] not in cls.actions_next_execute_time or current_time > cls.actions_next_execute_time[action["Name"]]):
-                    result = Actions.execute_action(action)
+                    result = cls.execute_action(action)
 
                     if result:
                         action["Fulfilled"] = 1
@@ -112,6 +130,21 @@ class Actions:
                         executed_actions.append(action["Name"])
         
         return bool(executed_actions)
+    
+    def hold_button(events, keyboard_presser, duration, key):
+        keyboard_presser.press(key)
+
+        for _ in range(duration):
+            events["IsAlive"].wait(1)
+            if events["EXIT"].is_set():
+
+            while not events["IsAlive"].is_set():
+                events["IsAlive"].wait(1)
+
+            #keyboard_presser.press(key)
+
+        keyboard_presser.release(key)
+
 
 class ActionsHandler:
     @classmethod
@@ -172,6 +205,7 @@ class ActionsHandler:
             cls.actions = keep_actions
             cls.save()
 
+
 def main():
     ActionsHandler.get_saved()
 
@@ -196,7 +230,7 @@ def main():
 
         edit_made = ActionsHandler.merge_new(new_actions)
 
-        actions_executed = Actions.execute_actions()
+        actions_executed = ActionsDependancies.execute_actions()
         
         if actions_executed or edit_made:
             ActionsHandler.save()
