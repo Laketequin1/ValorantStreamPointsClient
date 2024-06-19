@@ -97,7 +97,7 @@ class Actions():
     
     @staticmethod
     def rick_roll():
-        rick_roll_thread = threading.Thread(target=ActionsDependancies.play_audio_with_fadeout, args=(events, RICK_ROLL_FILE, 60))
+        rick_roll_thread = threading.Thread(target=ActionsDependancies.play_audio_with_fadeout, args=(events, RICK_ROLL_FILE, 61))
         rick_roll_thread.start()
         return True
 
@@ -189,9 +189,10 @@ class ActionsDependancies:
     @staticmethod
     def play_audio_with_fadeout(events, file_path, duration):
         """
-        Plays an audio file with a fade-out effect over the specified duration.
+        Plays an audio file with a fade-out effect over the specified duration on two sound devices.
 
         Args:
+            events (dict): Dictionary containing threading events.
             file_path (str): Path to the audio file.
             duration (float): Duration for the fade-out effect in seconds.
         """
@@ -202,19 +203,25 @@ class ActionsDependancies:
         # Create a PyAudio instance
         p = pyaudio.PyAudio()
 
-        # Open a stream
-        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+        # Open two streams for two different devices
+        stream1 = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                         channels=wf.getnchannels(),
                         rate=wf.getframerate(),
-                        output=True)
+                        output=True,
+                        output_device_index=4)  # You can specify the device index
+
+        stream2 = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True,
+                        output_device_index=21)  # You can specify the device index
 
         buffer_size = 512
         volume = 1.0
-
         start_time = time.time()
 
         # Read and play audio data
-        while stream.is_active():
+        while stream1.is_active() and stream2.is_active():
             if events["EXIT"].is_set():
                 break
 
@@ -231,12 +238,15 @@ class ActionsDependancies:
             audio_data = np.frombuffer(data, dtype=np.int16)
             # Apply volume
             audio_data = (audio_data * volume).astype(np.int16)
-            # Write audio data to stream
-            stream.write(audio_data.tobytes())
+            # Write audio data to both streams
+            stream1.write(audio_data.tobytes())
+            stream2.write(audio_data.tobytes())
 
-        # Stop and close the stream
-        stream.stop_stream()
-        stream.close()
+        # Stop and close the streams
+        stream1.stop_stream()
+        stream1.close()
+        stream2.stop_stream()
+        stream2.close()
         # Close PyAudio
         p.terminate()
         # Close the audio file
