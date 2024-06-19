@@ -1,1 +1,34 @@
-[]
+[
+    {
+        "ActionID": 1631,
+        "Username": "AwSnap",
+        "Name": "Jump",
+        "ActivationTime": 1718783303959,
+        "IntervalSeconds": 1,
+        "Fulfilled": 0
+    },
+    {
+        "ActionID": 1630,
+        "Username": "AwSnap",
+        "Name": "Inspect Gun",
+        "ActivationTime": 1718783303790,
+        "IntervalSeconds": 0,
+        "Fulfilled": 0
+    },
+    {
+        "ActionID": 1632,
+        "Username": "AwSnap",
+        "Name": "Inspect Gun",
+        "ActivationTime": 1718783305013,
+        "IntervalSeconds": 0,
+        "Fulfilled": 0
+    },
+    {
+        "ActionID": 1633,
+        "Username": "AwSnap",
+        "Name": "Inspect Gun",
+        "ActivationTime": 1718783305191,
+        "IntervalSeconds": 0,
+        "Fulfilled": 0
+    }
+]

@@ -12,6 +12,9 @@ import math
 import wave
 import pyaudio
 import numpy as np
+import random
+import os
+import pyttsx3
 pyautogui.FAILSAFE = False
 
 import AwSnapUtil
@@ -115,7 +118,7 @@ class ActionsDependancies:
     def execute_action(cls, action):
         action_function_name = action["Name"].lower().strip().replace(" ", "_").replace("+", "_")
 
-        # DISPLAY USERS NAME
+        threading.Thread(target=ActionsDependancies.text_to_speech, args=(f"{action.get('Username')} activated {action.get('Name')}!",)).start()
 
         if hasattr(Actions, action_function_name):
             action_function = getattr(Actions, action_function_name)
@@ -187,6 +190,25 @@ class ActionsDependancies:
         return True
     
     @staticmethod
+    def text_to_speech(message, volume = 1.0):
+        try:
+            engine = pyttsx3.init()
+        except OSError:
+            return
+
+        save_file = f"Temp/tts_{random.randint(1, 10000)}-{time.time()}.wav"
+
+        engine.setProperty('rate', 200)
+        engine.setProperty('volume', volume)
+
+        engine.save_to_file(message, save_file)
+        engine.runAndWait()
+
+        ActionsDependancies.play_audio(events, save_file)
+
+        os.remove(save_file)
+
+    @staticmethod
     def play_audio_with_fadeout(events, file_path, duration):
         """
         Plays an audio file with a fade-out effect over the specified duration on two sound devices.
@@ -251,6 +273,70 @@ class ActionsDependancies:
         p.terminate()
         # Close the audio file
         wf.close()
+
+    @staticmethod
+    def play_audio(events, file_path, volume = 1.0):
+        """
+        Plays an audio file with a fade-out effect over the specified duration on two sound devices.
+
+        Args:
+            events (dict): Dictionary containing threading events.
+            file_path (str): Path to the audio file.
+            duration (float): Duration for the fade-out effect in seconds.
+        """
+
+        # Open the audio file
+        wf = wave.open(file_path, 'rb')
+
+        # Create a PyAudio instance
+        p = pyaudio.PyAudio()
+
+        audio_format = p.get_format_from_width(wf.getsampwidth())
+
+        # Open two streams for two different devices
+        stream1 = p.open(format=audio_format,
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True,
+                        output_device_index=4)  # You can specify the device index
+
+        
+        stream2 = p.open(format=audio_format,
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True,
+                        output_device_index=8)  # You can specify the device index
+
+        buffer_size = 512
+
+        # Read and play audio data
+        while stream1.is_active() and stream2.is_active():
+            if events["EXIT"].is_set():
+                break
+
+            data = wf.readframes(buffer_size)
+            if len(data) == 0:
+                break
+
+            # Convert audio data to numpy array
+            audio_data = np.frombuffer(data, dtype=np.int16)
+            # Apply volume
+            audio_data = (audio_data * volume).astype(np.int16)
+            # Write audio data to both streams
+            stream1.write(audio_data.tobytes())
+            #stream2.write(audio_data.tobytes())
+
+        # Stop and close the streams
+        stream1.stop_stream()
+        stream1.close()
+        stream2.stop_stream()
+        stream2.close()
+        # Close PyAudio
+        p.terminate()
+        # Close the audio file
+        wf.close()
+
+        return True
 
 class ActionsHandler:
     @classmethod
