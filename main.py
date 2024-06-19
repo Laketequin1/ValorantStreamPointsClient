@@ -9,6 +9,9 @@ import time
 import pynput
 import sys
 import math
+import wave
+import pyaudio
+import numpy as np
 pyautogui.FAILSAFE = False
 
 import AwSnapUtil
@@ -18,6 +21,8 @@ TICK_SPEED = 0.05
 
 ACTIONS_FILE = "actions.json"
 VALORANT_TITLE = "VALORANT"
+
+RICK_ROLL_FILE = "Audio/Rick Roll.wav"
 
 IN_GAME_PIXEL = {"POS": (961, 131), "COLOUR": (240, 240, 240), "ABOVE_TOLERANCE": 15, "BELOW_TOLERANCE": 7}
 DEAD_PIXEL = {"POS": (30, 797), "COLOUR": (254, 254, 254), "ABOVE_TOLERANCE": 1, "BELOW_TOLERANCE": 20}
@@ -91,6 +96,12 @@ class Actions():
         return True
     
     @staticmethod
+    def rick_roll():
+        rick_roll_thread = threading.Thread(target=ActionsDependancies.play_audio_with_fadeout, args=(events, RICK_ROLL_FILE, 60))
+        rick_roll_thread.start()
+        return True
+
+    @staticmethod
     def drop_gun():
         keyboard_presser.tap("g")
         return True
@@ -138,6 +149,7 @@ class ActionsDependancies:
         
         return bool(executed_actions)
     
+    @staticmethod
     def hold_button(events, keyboard_presser, duration, key):
         def exit_hold_button():
             keyboard_presser.release(key)
@@ -173,6 +185,62 @@ class ActionsDependancies:
         keyboard_presser.release(key)
 
         return True
+    
+    @staticmethod
+    def play_audio_with_fadeout(events, file_path, duration):
+        """
+        Plays an audio file with a fade-out effect over the specified duration.
+
+        Args:
+            file_path (str): Path to the audio file.
+            duration (float): Duration for the fade-out effect in seconds.
+        """
+
+        # Open the audio file
+        wf = wave.open(file_path, 'rb')
+
+        # Create a PyAudio instance
+        p = pyaudio.PyAudio()
+
+        # Open a stream
+        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True)
+
+        buffer_size = 512
+        volume = 1.0
+
+        start_time = time.time()
+
+        # Read and play audio data
+        while stream.is_active():
+            if events["EXIT"].is_set():
+                break
+
+            data = wf.readframes(buffer_size)
+            if len(data) == 0:
+                break
+
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            if elapsed_time < duration:
+                volume = max(0.0, 0.5 * pow(1.5, -(elapsed_time + 1)) - (0.022 / 60) * elapsed_time + 0.022)
+
+            # Convert audio data to numpy array
+            audio_data = np.frombuffer(data, dtype=np.int16)
+            # Apply volume
+            audio_data = (audio_data * volume).astype(np.int16)
+            # Write audio data to stream
+            stream.write(audio_data.tobytes())
+
+        # Stop and close the stream
+        stream.stop_stream()
+        stream.close()
+        # Close PyAudio
+        p.terminate()
+        # Close the audio file
+        wf.close()
 
 class ActionsHandler:
     @classmethod
