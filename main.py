@@ -1,3 +1,6 @@
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
+
 import requests
 import getpass
 import json
@@ -19,10 +22,11 @@ import win32con
 import random
 from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 from comtypes import CoInitialize, CoUninitialize
-pyautogui.FAILSAFE = False
 
 import AwSnapUtil
 AwSnapUtil.verbose_level = 2
+
+pyautogui.FAILSAFE = False
 
 MAIN_LOOP_DELAY = 0.05
 FRAME_RATE = 30
@@ -414,9 +418,6 @@ class ActionOverlay:
     TEXT_LIFETIME_SECONDS = 5
     ANIMATION_DURATION = 0.4
 
-    # Render settings
-    FRAME_RATE = 30
-
     def __init__(self, events):
         """Initializes the overlay window and sets its properties."""
         pygame.init()
@@ -577,7 +578,7 @@ class ActionOverlay:
                 self.render()
 
                 # Cap the frame rate to 30 FPS (optional, adjust as needed)
-                self.clock.tick(self.FRAME_RATE)
+                self.clock.tick(FRAME_RATE)
         except Exception as e:
             print(f"Error in main loop: {e}")
             self.running = False
