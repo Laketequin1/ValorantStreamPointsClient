@@ -417,9 +417,11 @@ class ActionOverlay:
     # Render settings
     FRAME_RATE = 30
 
-    def __init__(self):
+    def __init__(self, events):
         """Initializes the overlay window and sets its properties."""
         pygame.init()
+
+        self.events = events
 
         self.clock = pygame.time.Clock()
 
@@ -498,6 +500,7 @@ class ActionOverlay:
         try:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    self.running = False
                     return False
             return True
         except Exception as e:
@@ -566,6 +569,10 @@ class ActionOverlay:
         """
         try:
             while self.running:
+                if events["EXIT"].is_set():
+                    pygame.quit()
+                    sys.exit(0)
+
                 # Render the overlay
                 self.render()
 
@@ -584,10 +591,9 @@ def main():
     url = 'https://projectspace.nz/wrkvaxxi/ValorantStreamPoints/post/get_actions.php'
     password = getpass.getpass('Enter password: ')
 
-    overlay = ActionOverlay()
+    overlay = ActionOverlay(events)
 
-    running = True
-    while running:
+    while True:
         fulfilled_action_ids = ActionsHandler.get_fulfilled_action_ids()
 
         # Data to be sent in the POST request
@@ -625,6 +631,8 @@ def main():
             print(msg)
 
         running = overlay.handle_events()
+        if not running:
+            sys.exit(0)
 
         time.sleep(0.05)
 
