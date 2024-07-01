@@ -1,56 +1,52 @@
-import sys
-import time
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel
+import pygame
+import win32api
+import win32gui
+import win32con
+import ctypes
 
+# Initialize the pygame library
+pygame.init()
 
-class MainWindow(QMainWindow):
-    update_text_signal = QtCore.pyqtSignal(str)
+# Set the dimensions of the window
+window_width = 800
+window_height = 600
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowFlags(
-            QtCore.Qt.WindowStaysOnTopHint |
-            QtCore.Qt.FramelessWindowHint |
-            QtCore.Qt.X11BypassWindowManagerHint
-        )
+# Create the window with no frame
+screen = pygame.display.set_mode((window_width, window_height), pygame.NOFRAME)
 
-        self.label = QLabel(self)
-        self.label.setGeometry(10, 10, 200, 20)
+# Get the window handle (HWND)
+hwnd = pygame.display.get_wm_info()['window']
 
-        screen_geometry = QtWidgets.qApp.desktop().availableGeometry()
-        window_geometry = self.geometry()
-        x = screen_geometry.left()
-        y = screen_geometry.bottom() - window_geometry.height()
-        self.setGeometry(x, y, 220, 32)
+# Set the title of the window
+pygame.display.set_caption("Pygame Window")
 
-        self.update_text_signal.connect(self.update_text)
+# Make the window always on top
+win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
+                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
 
-    def mousePressEvent(self, event):
-        QtWidgets.qApp.quit()
+# Make the window transparent
+# Get the current window style
+extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+# Add layered and transparent extended styles
+win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
+# Set the transparency color key to black (0, 0, 0)
+win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
 
-    @QtCore.pyqtSlot(str)
-    def update_text(self, message):
-        self.label.setText(message)
+# Main loop flag
+running = True
 
+# Main loop
+while running:
+    # Handle events
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+    
+    # Fill the screen with a color (RGB)
+    screen.fill((0, 0, 0))  # Black
 
-class Worker(QtCore.QThread):
-    update_text_signal = QtCore.pyqtSignal(str)
+    # Update the display
+    pygame.display.flip()
 
-    def run(self):
-        for x in range(10):
-            message = f"Print number {x}"
-            self.update_text_signal.emit(message)
-            time.sleep(1)
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    mywindow = MainWindow()
-    mywindow.show()
-
-    worker = Worker()
-    worker.update_text_signal.connect(mywindow.update_text)
-    worker.start()
-
-    sys.exit(app.exec_())
+# Quit pygame
+pygame.quit()

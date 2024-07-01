@@ -12,6 +12,8 @@ import math
 import wave
 import pyaudio
 import numpy as np
+from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+from comtypes import CoInitialize, CoUninitialize
 pyautogui.FAILSAFE = False
 
 import AwSnapUtil
@@ -105,6 +107,12 @@ class Actions():
     def drop_gun():
         keyboard_presser.tap("g")
         return True
+    
+    @staticmethod
+    def mute_game():
+        mute_game_thread = threading.Thread(target=ActionsDependancies.mute_valorant, args=(events, "VALORANT-Win64-Shipping.exe", 20))
+        mute_game_thread.start()
+        return True
 
 
 class ActionsDependancies:
@@ -147,7 +155,7 @@ class ActionsDependancies:
         
         return bool(executed_actions)
     
-    @staticmethod
+    @staticmethod # THREAD
     def hold_button(events, keyboard_presser, duration, key):
         def exit_hold_button():
             keyboard_presser.release(key)
@@ -184,7 +192,7 @@ class ActionsDependancies:
 
         return True
 
-    @staticmethod
+    @staticmethod # THREAD
     def play_audio_with_fadeout(events, file_path, duration):
         """
         Plays an audio file with a fade-out effect over the specified duration on two sound devices.
@@ -249,6 +257,44 @@ class ActionsDependancies:
         p.terminate()
         # Close the audio file
         wf.close()
+
+    @staticmethod
+    def set_app_volume(app_name, volume_level):
+        sessions = AudioUtilities.GetAllSessions()
+        for session in sessions:
+            if session.Process and session.Process.name().lower() == app_name.lower():
+                volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+                volume.SetMasterVolume(volume_level, None)
+                return True
+        return False
+
+    @staticmethod # THREAD
+    def mute_valorant(events, app_name, duration):
+        CoInitialize()
+        
+        def exit_mute_valorant():
+            ActionsDependancies.set_app_volume(app_name, 1)
+            return False
+
+        INTERVAL = 0.2
+
+        while not events["is_alive"].is_set():
+            if events["EXIT"].is_set():
+                exit_mute_valorant()
+
+            time.sleep(INTERVAL)
+
+        ActionsDependancies.set_app_volume(app_name, 0)
+
+        for _ in range(math.floor(duration / INTERVAL)):
+            if events["EXIT"].is_set():
+                exit_mute_valorant()
+
+            time.sleep(INTERVAL)
+
+        ActionsDependancies.set_app_volume(app_name, 1)
+
+        return True
 
 
 class ActionsHandler:
