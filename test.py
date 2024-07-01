@@ -2,8 +2,8 @@ import pygame
 import win32api
 import win32gui
 import win32con
-import ctypes
 import random
+import time
 
 # Initialize the pygame library
 pygame.init()
@@ -40,7 +40,8 @@ win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA
 # Function to add text to the window
 def add_text(text):
     global lines_of_text
-    lines_of_text.append(text)
+    current_time = time.time()
+    lines_of_text.append((text, current_time))
     if len(lines_of_text) > max_lines:
         lines_of_text = lines_of_text[-max_lines:]
 
@@ -60,25 +61,43 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-    
-    # Fill the screen with a color (RGB)
-    screen.fill((0, 0, 0))  # Black
-    
-    size = 48
 
-    # Render text on the screen
-    font = pygame.font.Font(None, size)
-    text_y = window_height
-    for line in reversed(lines_of_text):
+    # Check for expired text
+    current_time = time.time()
+    lines_of_text = [(text, t) for text, t in lines_of_text if current_time - t < 5]
+
+    # Fill the screen with a color (RGB)
+    screen.fill((0, 0, 0))  # Must be black background
+
+    # Render text on the screen with rounded border
+    font = pygame.font.Font(None, 48)
+    text_y = window_height - 46
+    for line, _ in reversed(lines_of_text):
+        # Render text surface
         text_surface = font.render(line, True, (255, 255, 255))  # White text
-        screen.blit(text_surface, (10, text_y))
-        text_y -= size * 0.8
-    
+
+        # Create rounded rectangle surface for text background
+        text_rect = text_surface.get_rect()
+        text_rect.left = 10
+        text_rect.top = text_y
+        text_rect.width += 20  # Add padding
+        text_rect.height += 10  # Add padding
+        pygame.draw.rect(screen, (0, 0, 20), text_rect, border_radius=10)  # Dark blue rounded rectangle
+
+        # Blit text onto screen
+        screen.blit(text_surface, (20, text_rect.top + 5))  # Offset text slightly for padding
+
+        # Adjust y position for next line
+        text_y -= 46  # Increase the spacing between lines
+
     # Update the display
     pygame.display.flip()
 
     # Add a random text line
-    add_text("HEY: " + str(random.randint(0, 10)))
+    if random.randint(1, 50) == 1:
+        msg = "HEY: " + str(random.randint(0, 10))
+        add_text(msg)
+        print(msg)
 
     # Cap the frame rate to 30 FPS (optional, adjust as needed)
     clock.tick(30)
