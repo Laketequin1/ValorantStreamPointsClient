@@ -5,102 +5,200 @@ import win32con
 import random
 import time
 
-# Initialize the pygame library
-pygame.init()
+class ActionOverlay:
+    """
+    ActionOverlay is a class to manage and display a transparent overlay window with text that slides out after a set duration.
 
-# Get the dimensions of the screen
-screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
-screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+    Attributes:
+    -----------
+    lines_of_text : list
+        A list to store tuples of text and the time they were added.
 
-# Calculate the window dimensions based on percentages
-window_width = round(screen_width * 0.3)
-window_height = round(screen_height * 0.4)
+    Methods:
+    --------
+    __init__():
+        Initializes the overlay window and sets its properties.
 
-# Calculate the window position (bottom left)
-window_x = 0
-window_y = screen_height - window_height
+    add_text(text: str) -> None:
+        Adds a line of text with a timestamp to the overlay.
 
-# Create the window with no frame
-screen = pygame.display.set_mode((window_width, window_height), pygame.NOFRAME)
+    handle_events() -> bool:
+        Handles pygame events and returns whether the main loop should continue.
 
-# Get the window handle (HWND)
-hwnd = pygame.display.get_wm_info()['window']
+    render() -> None:
+        Renders the text onto the overlay window and handles the sliding animation.
+    """
 
-# Set the title of the window
-pygame.display.set_caption("Pygame Window")
+    # Window size
+    WINDOW_PERCENT_WIDTH = 0.3
+    WINDOW_PERCENT_HEIGHT = 0.4
 
-# Make the window always on top
-win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, window_x, window_y, window_width, window_height, win32con.SWP_SHOWWINDOW)
+    # Colours
+    WINDOW_BG_COLOR = (0, 0, 0)
+    TEXT_COLOR = (255, 255, 255)
+    TEXT_BG_COLOR = (0, 0, 20)
 
-# Make the window transparent
-extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
-win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
+    # Text padding
+    TEXT_PADDING_X = 10
+    TEXT_PADDING_Y = 5
+    TEXT_LINE_HEIGHT = 46
+    FONT_SIZE = 48
 
-# Function to add text to the window
-def add_text(text):
-    global lines_of_text
-    current_time = time.time()
-    lines_of_text.append((text, current_time))
-    if len(lines_of_text) > max_lines:
-        lines_of_text = lines_of_text[-max_lines:]
+    # Text settings
+    MAX_LINES = 8
+    TEXT_LIFETIME_SECONDS = 5
+    ANIMATION_DURATION = 0.4
 
-# Variables for managing text
-lines_of_text = []
-max_lines = 10  # Maximum number of lines to display
+    # Render settings
+    FRAME_RATE = 30
 
-# Main loop flag
-running = True
+    def __init__(self):
+        """Initializes the overlay window and sets its properties."""
+        pygame.init()
 
-# Clock for controlling frame rate
-clock = pygame.time.Clock()
+        # Get the dimensions of the screen
+        self.screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+        self.screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
 
-# Main loop
-while running:
-    # Handle events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+        # Calculate the window dimensions based on percentages
+        self.window_width = round(self.screen_width * self.WINDOW_PERCENT_WIDTH)
+        self.window_height = round(self.screen_height * self.WINDOW_PERCENT_HEIGHT)
 
-    # Check for expired text
-    current_time = time.time()
-    lines_of_text = [(text, t) for text, t in lines_of_text if current_time - t < 5]
+        # Calculate the window position (bottom left)
+        self.window_x = 0
+        self.window_y = self.screen_height - self.window_height
 
-    # Fill the screen with a color (RGB)
-    screen.fill((0, 0, 0))  # Must be black background
+        # Create the window with no frame
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.NOFRAME)
 
-    # Render text on the screen with rounded border
-    font = pygame.font.Font(None, 48)
-    text_y = window_height - 46
-    for line, _ in reversed(lines_of_text):
-        # Render text surface
-        text_surface = font.render(line, True, (255, 255, 255))  # White text
+        # Get the window handle (HWND)
+        hwnd = pygame.display.get_wm_info()['window']
 
-        # Create rounded rectangle surface for text background
-        text_rect = text_surface.get_rect()
-        text_rect.left = 10
-        text_rect.top = text_y
-        text_rect.width += 20  # Add padding
-        text_rect.height += 10  # Add padding
-        pygame.draw.rect(screen, (0, 0, 20), text_rect, border_radius=10)  # Dark blue rounded rectangle
+        # Set the title of the window
+        pygame.display.set_caption("VSP Action Overlay")
 
-        # Blit text onto screen
-        screen.blit(text_surface, (20, text_rect.top + 5))  # Offset text slightly for padding
+        # Make the window always on top
+        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.window_width, self.window_height, win32con.SWP_SHOWWINDOW)
 
-        # Adjust y position for next line
-        text_y -= 46  # Increase the spacing between lines
+        # Make the window transparent
+        extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
+        win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
 
-    # Update the display
-    pygame.display.flip()
+        # Variables for managing text
+        self.lines_of_text = []
 
-    # Add a random text line
-    if random.randint(1, 50) == 1:
-        msg = "HEY: " + str(random.randint(0, 10))
-        add_text(msg)
-        print(msg)
+    def add_text(self, text: str) -> None:
+        """
+        Adds a line of text with a timestamp to the overlay.
 
-    # Cap the frame rate to 30 FPS (optional, adjust as needed)
-    clock.tick(30)
+        Parameters:
+        -----------
+        text : str
+            The text to be added to the overlay.
 
-# Quit pygame
-pygame.quit()
+        Example:
+        --------
+        >>> overlay.add_text("Hello, World!")
+        """
+        current_time = time.time()
+        self.lines_of_text.append((text, current_time))
+        if len(self.lines_of_text) > self.MAX_LINES:
+            self.lines_of_text = self.lines_of_text[-self.MAX_LINES:]
+
+    def handle_events(self) -> bool:
+        """
+        Handles pygame events and returns whether the main loop should continue.
+
+        Returns:
+        --------
+        bool
+            False if the quit event is detected, True otherwise.
+
+        Example:
+        --------
+        >>> running = overlay.handle_events()
+        >>> running
+        True
+        """
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+        return True
+
+    def render(self) -> None:
+        """
+        Renders the text onto the overlay window and handles the sliding animation.
+
+        Example:
+        --------
+        >>> overlay.render()
+        """
+        current_time = time.time()
+        self.lines_of_text = [(text, t) for text, t in self.lines_of_text if current_time - t < (self.TEXT_LIFETIME_SECONDS + self.ANIMATION_DURATION)]
+
+        # Fill the screen with a color (RGB)
+        self.screen.fill(self.WINDOW_BG_COLOR)  # Must be black background
+
+        # Render text on the screen with rounded border
+        font = pygame.font.Font(None, self.FONT_SIZE)
+        text_y = self.window_height - self.TEXT_LINE_HEIGHT
+        for line, t in reversed(self.lines_of_text):
+            elapsed_time = current_time - t
+
+            # Calculate the text x position based on elapsed time
+            if elapsed_time > self.TEXT_LIFETIME_SECONDS:
+                animation_progress = (elapsed_time - self.TEXT_LIFETIME_SECONDS) / self.ANIMATION_DURATION
+                text_x = int(self.TEXT_PADDING_X - self.window_width * animation_progress)
+            else:
+                text_x = self.TEXT_PADDING_X
+
+            # Render text surface
+            text_surface = font.render(line, True, self.TEXT_COLOR)  # White text
+
+            # Create rounded rectangle surface for text background
+            text_rect = text_surface.get_rect()
+            text_rect.left = text_x
+            text_rect.top = text_y
+            text_rect.width += self.TEXT_PADDING_X * 2  # Add padding
+            text_rect.height += self.TEXT_PADDING_Y * 2  # Add padding
+            pygame.draw.rect(self.screen, self.TEXT_BG_COLOR, text_rect, border_radius=10)  # Dark blue rounded rectangle
+
+            # Blit text onto screen
+            self.screen.blit(text_surface, (text_rect.left + self.TEXT_PADDING_X, text_rect.top + self.TEXT_PADDING_Y))  # Offset text slightly for padding
+
+            # Adjust y position for next line
+            text_y -= self.TEXT_LINE_HEIGHT  # Increase the spacing between lines
+
+        # Update the display
+        pygame.display.flip()
+
+
+if __name__ == "__main__":
+    overlay = ActionOverlay()
+
+    # Main loop flag
+    running = True
+
+    # Clock for controlling frame rate
+    clock = pygame.time.Clock()
+
+    # Main loop
+    while running:
+        # Handle events
+        running = overlay.handle_events()
+
+        # Render the overlay
+        overlay.render()
+
+        # Add a random text line
+        if random.randint(1, 50) == 1:
+            msg = "HEY: " + str(random.randint(0, 10))
+            overlay.add_text(msg)
+            print(msg)
+
+        # Cap the frame rate to 30 FPS (optional, adjust as needed)
+        clock.tick(ActionOverlay.FRAME_RATE)
+
+    # Quit pygame
+    pygame.quit()
