@@ -20,6 +20,7 @@ import win32api
 import win32gui
 import win32con
 import random
+import keyboard
 from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 from comtypes import CoInitialize, CoUninitialize
 
@@ -29,7 +30,7 @@ AwSnapUtil.verbose_level = 2
 pyautogui.FAILSAFE = False
 
 MAIN_LOOP_DELAY = 0.05
-FRAME_RATE = 30
+FRAME_RATE = 60
 
 ACTIONS_FILE = "actions.json"
 VALORANT_TITLE = "VALORANT"
@@ -103,7 +104,7 @@ class Actions:
     
     @staticmethod
     def crouch():
-        crouch_thread = threading.Thread(target=ActionsDependancies.hold_button, args=(events, keyboard_presser, 10, pynput.keyboard.Key.ctrl))
+        crouch_thread = threading.Thread(target=ActionsDependancies.hold_buttons, args=(events, keyboard_presser, 10, [pynput.keyboard.Key.ctrl]))
         crouch_thread.start()
         return True
     
@@ -123,7 +124,18 @@ class Actions:
         mute_game_thread = threading.Thread(target=ActionsDependancies.mute_valorant, args=(events, "VALORANT-Win64-Shipping.exe", 20))
         mute_game_thread.start()
         return True
-
+    
+    @staticmethod
+    def knife_only():
+        spam_thread = threading.Thread(target=ActionsDependancies.spam_button, args=(events, keyboard_presser, 10, "g"))
+        spam_thread.start()
+        return True
+    
+    @staticmethod
+    def disable_wasd():
+        disable_wasd_thread = threading.Thread(target=ActionsDependancies.disable_buttons, args=(events, 10, ["w", "a", "s", "d"]))
+        disable_wasd_thread.start()
+        return True
 
 class ActionsDependancies:
     actions_next_execute_time = {}
@@ -137,7 +149,7 @@ class ActionsDependancies:
             action_function = getattr(Actions, action_function_name)
         else:
             print(f"{action_function_name} does not exist as an available function")
-            return True # TEMPOARY NEEDS CHANGED TO FALSE
+            return False # TEMPOARY NEEDS CHANGED TO FALSE (DONE?)
 
         result = action_function()
 
@@ -145,7 +157,7 @@ class ActionsDependancies:
     
     @classmethod
     @AwSnapUtil.log_function(3)
-    def execute_actions(cls, is_alive):
+    def execute_actions(cls, is_alive, overlay):
         executed_actions = []
 
         current_time = time.time()
@@ -156,6 +168,9 @@ class ActionsDependancies:
                     result = cls.execute_action(action)
 
                     if result:
+                        msg = f"{action['Username']} executed {action['Name']}"
+                        overlay.add_text(msg)
+
                         action["Fulfilled"] = 1
 
                         if action["IntervalSeconds"] > 0:
@@ -166,22 +181,19 @@ class ActionsDependancies:
         return bool(executed_actions)
     
     @staticmethod # THREAD
-    def hold_button(events, keyboard_presser, duration, key):
+    def spam_button(events, keyboard_presser, duration, key):
         def exit_hold_button():
             keyboard_presser.release(key)
             return False
 
-        keyboard_presser.press(key)
-
         is_alive = False
-        INTERVAL = 0.2
+        INTERVAL = 0.1
 
         for _ in range(math.floor(duration / INTERVAL)):
             if events["EXIT"].is_set():
                 exit_hold_button()
 
             if not events["is_alive"].is_set():
-                keyboard_presser.release(key)
                 is_alive = False
 
             while not is_alive:
@@ -191,14 +203,96 @@ class ActionsDependancies:
                     exit_hold_button()
 
                 if events["is_alive"].is_set():
-                    keyboard_presser.press(key)
                     is_alive = True
 
-            keyboard_presser.press(key)
+            keyboard_presser.tap(key)
 
             time.sleep(INTERVAL)
 
         keyboard_presser.release(key)
+
+        return True
+    
+    @staticmethod # THREAD
+    def hold_buttons(events, keyboard_presser, duration, keys):
+        def exit_hold_button():
+            for key in keys:
+                keyboard_presser.release(key)
+            return False
+
+        for key in keys:
+            keyboard_presser.press(key)
+
+        is_alive = False
+        INTERVAL = 0.2
+
+        for _ in range(math.floor(duration / INTERVAL)):
+            if events["EXIT"].is_set():
+                exit_hold_button()
+
+            if not events["is_alive"].is_set():
+                for key in keys:
+                    keyboard_presser.release(key)
+                is_alive = False
+
+            while not is_alive:
+                time.sleep(INTERVAL)
+
+                if events["EXIT"].is_set():
+                    exit_hold_button()
+
+                if events["is_alive"].is_set():
+                    for key in keys:
+                        keyboard_presser.press(key)
+                    is_alive = True
+
+            for key in keys:
+                keyboard_presser.press(key)
+
+            time.sleep(INTERVAL)
+
+        for key in keys:
+            keyboard_presser.release(key)
+
+        return True
+    
+    @staticmethod # THREAD
+    def disable_buttons(events, duration, keys):
+        def exit_disable_button():
+            for key in keys:
+                keyboard.unblock_key(key)
+            return False
+
+        for key in keys:
+            keyboard.block_key(key)
+
+        is_alive = False
+        INTERVAL = 0.2
+
+        for _ in range(math.floor(duration / INTERVAL)):
+            if events["EXIT"].is_set():
+                exit_disable_button()
+
+            if not events["is_alive"].is_set():
+                for key in keys:
+                    keyboard.unblock_key(key)
+                is_alive = False
+
+            while not is_alive:
+                time.sleep(INTERVAL)
+
+                if events["EXIT"].is_set():
+                    exit_disable_button()
+
+                if events["is_alive"].is_set():
+                    for key in keys:
+                        keyboard.block_key(key)
+                    is_alive = True
+
+            time.sleep(INTERVAL)
+
+        for key in keys:
+            keyboard.unblock_key(key)
 
         return True
 
@@ -410,12 +504,12 @@ class ActionOverlay:
     # Text padding
     TEXT_PADDING_X = 10
     TEXT_PADDING_Y = 5
-    TEXT_LINE_HEIGHT = 46
-    FONT_SIZE = 48
+    FONT_SIZE = 36
+    TEXT_LINE_HEIGHT = 44
 
     # Text settings
     MAX_LINES = 8
-    TEXT_LIFETIME_SECONDS = 5
+    TEXT_LIFETIME_SECONDS = 15
     ANIMATION_DURATION = 0.4
 
     def __init__(self, events):
@@ -445,7 +539,7 @@ class ActionOverlay:
         hwnd = pygame.display.get_wm_info()['window']
 
         # Set the title of the window
-        pygame.display.set_caption("Pygame Window")
+        pygame.display.set_caption("VSP Action Overlay")
 
         # Make the window always on top
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.window_width, self.window_height, win32con.SWP_SHOWWINDOW)
@@ -610,6 +704,8 @@ def main():
         
         new_actions = AwSnapUtil.eval_message(response.text)
 
+        print(new_actions)
+
         edit_made = ActionsHandler.merge_new(new_actions)
 
         if is_alive != ValorantInfo.get_alive():
@@ -620,16 +716,10 @@ def main():
             else:
                 events["is_alive"].clear()
 
-        actions_executed = ActionsDependancies.execute_actions(is_alive)
+        actions_executed = ActionsDependancies.execute_actions(is_alive, overlay)
         
         if actions_executed or edit_made:
             ActionsHandler.save()
-
-        # Add a random text line
-        if random.randint(1, 5) == 1:
-            msg = "HEY: " + str(random.randint(0, 10))
-            overlay.add_text(msg)
-            print(msg)
 
         running = overlay.handle_events()
         if not running:
