@@ -70,8 +70,9 @@ def eval_message(message):
         warn(f"Message length is 0")
         return None
 
-def get_pixel_colour(pixel_pos):
-    hwnd = win32gui.GetDesktopWindow()
+def get_pixel_colour(pixel_pos, hwnd=None):
+    if hwnd is None:
+        hwnd = win32gui.GetDesktopWindow()
     wDC = win32gui.GetWindowDC(hwnd)
     dcObj = win32ui.CreateDCFromHandle(wDC)
     cDC = dcObj.CreateCompatibleDC()

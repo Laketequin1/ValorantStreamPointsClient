@@ -27,6 +27,7 @@ from comtypes import CoInitialize, CoUninitialize
 import AwSnapUtil
 AwSnapUtil.verbose_level = 2
 
+pygame.init()
 pyautogui.FAILSAFE = False
 
 MAIN_LOOP_DELAY = 0.05
@@ -63,21 +64,23 @@ class ValorantInfo:
     def get_active_window() -> str:
         active_window = pygetwindow.getActiveWindow()
         if active_window != None:
-            return pygetwindow.getActiveWindow().title
+            return active_window
         else:
             return None
 
     @classmethod
     def get_in_game(cls) -> bool:
-        window_name = cls.get_active_window()
+        window = cls.get_active_window()
+        window_name = window.title
+        window_hwnd = window._hWnd
         if window_name != None and window_name.upper().strip() == VALORANT_TITLE:
-            if cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(IN_GAME_PIXEL["POS"]), IN_GAME_PIXEL["COLOUR"], IN_GAME_PIXEL["BELOW_TOLERANCE"], IN_GAME_PIXEL["ABOVE_TOLERANCE"]):
+            if cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(IN_GAME_PIXEL["POS"], window_hwnd), IN_GAME_PIXEL["COLOUR"], IN_GAME_PIXEL["BELOW_TOLERANCE"], IN_GAME_PIXEL["ABOVE_TOLERANCE"]):
                 return True
         return False
 
     @classmethod
     def get_alive(cls) -> bool:
-        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"]), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
+        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"], cls.get_active_window()._hWnd), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
             if cls.alive_last_tick:
                 return True
             else:
@@ -493,19 +496,28 @@ class ActionOverlay:
     """
 
     # Window size
-    WINDOW_PERCENT_WIDTH = 0.3
-    WINDOW_PERCENT_HEIGHT = 0.4
+    TEXT_WINDOW_PERCENT_WIDTH = 0.3
+    TEXT_WINDOW_PERCENT_HEIGHT = 0.4
 
     # Colours
     WINDOW_BG_COLOR = (0, 0, 0)
     TEXT_COLOR = (255, 255, 255)
     TEXT_BG_COLOR = (0, 0, 20)
 
+    LIGHT_GREY = (250, 250, 250)
+    BLACK = (1, 1, 1)
+
     # Text padding
     TEXT_PADDING_X = 10
     TEXT_PADDING_Y = 5
     FONT_SIZE = 36
     TEXT_LINE_HEIGHT = 44
+
+    # Ads
+    AD_WIDTH = 0.4
+    AD_HEIGHT = 0.3
+
+    AD_BORDER = 2 #px
 
     # Text settings
     MAX_LINES = 8
@@ -514,8 +526,6 @@ class ActionOverlay:
 
     def __init__(self, events):
         """Initializes the overlay window and sets its properties."""
-        pygame.init()
-
         self.events = events
 
         self.clock = pygame.time.Clock()
@@ -525,15 +535,15 @@ class ActionOverlay:
         self.screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
 
         # Calculate the window dimensions based on percentages
-        self.window_width = round(self.screen_width * self.WINDOW_PERCENT_WIDTH)
-        self.window_height = round(self.screen_height * self.WINDOW_PERCENT_HEIGHT)
+        self.text_window_width = round(self.screen_width * self.TEXT_WINDOW_PERCENT_WIDTH)
+        self.text_window_height = round(self.screen_height * self.TEXT_WINDOW_PERCENT_HEIGHT)
 
-        # Calculate the window position (bottom left)
+        # Calculate the window position
         self.window_x = 0
-        self.window_y = self.screen_height - self.window_height
+        self.window_y = 0
 
         # Create the window with no frame
-        self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.NOFRAME)
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.NOFRAME)
 
         # Get the window handle (HWND)
         hwnd = pygame.display.get_wm_info()['window']
@@ -542,16 +552,25 @@ class ActionOverlay:
         pygame.display.set_caption("VSP Action Overlay")
 
         # Make the window always on top
-        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.window_width, self.window_height, win32con.SWP_SHOWWINDOW)
+        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.screen_width, self.screen_height, win32con.SWP_SHOWWINDOW)
 
         # Make the window transparent
         extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
         win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
 
-        # Variables for managing text
+        # Variables for text
         self.lines_of_text = []
         self.lock = threading.Lock()
+
+        # Variables for ads
+        self.ads = []
+
+        self.ad_width = round(self.screen_width * self.AD_WIDTH)
+        self.ad_height = round(self.screen_height * self.AD_HEIGHT)
+
+        self.ad_button_width = min(50, self.ad_width)
+        self.ad_button_height = min(50, self.ad_height)
 
         # Start the main loop in a separate thread
         self.running = True
@@ -577,6 +596,97 @@ class ActionOverlay:
             if len(self.lines_of_text) > self.MAX_LINES:
                 self.lines_of_text = self.lines_of_text[-self.MAX_LINES:]
 
+    def add_ads(self, ad_count) -> None:
+        """
+        Adds new fake ad windows which the user has to close.
+
+        Parameters:
+        -----------
+        text : int
+            Number of new ads to create.
+
+        Example:
+        --------
+        >>> overlay.add_ad(3)
+        """
+
+        avalable_height = self.screen_height - self.ad_height
+        avalable_width = self.screen_width - self.ad_width
+
+        y_change = math.floor(avalable_height / ad_count)
+        y_random_max = y_change // ad_count
+        y_positions = []
+        y = random.randint(0, y_random_max)
+
+        x_change = math.floor(avalable_width / ad_count)
+        x_random_max = x_change // ad_count
+        x_positions = []
+        x = random.randint(0, x_random_max)
+
+        for _ in range(ad_count):
+            y_positions.append(y)
+            y += y_change + random.randint(0, y_random_max)
+
+            x_positions.append(x)
+            x += x_change + random.randint(0, x_random_max)
+
+        random.shuffle(y_positions)
+        random.shuffle(x_positions)
+
+        for i in range(ad_count):
+            x = x_positions[i]
+            y = y_positions[i]
+
+            surface = pygame.Surface((self.ad_width, self.ad_height))
+            surface.fill(self.LIGHT_GREY)
+            pygame.draw.rect(surface, self.BLACK, (0, 0, self.ad_width, self.ad_height), self.AD_BORDER)
+
+            ad = {"Position": (x, y), "Surface": surface}
+
+            self.ads.append(ad)
+
+    def is_running(self) -> bool:
+        """
+        Returns if window is running. Running is False when window is closed.
+
+        Returns:
+        --------
+        bool
+            False if window not running, True otherwise.
+
+        Example:
+        --------
+        >>> running = overlay.is_running()
+        >>> running
+        True
+        """
+
+        return self.running
+
+    def pos_in_rectangle(pos, left, top, right, bottom) -> bool:
+        """
+        Returns whether a position is in the given rectangle.
+
+        Returns:
+        --------
+        bool
+            True if position is within rectangle, False otherwise.
+
+        Example:
+        --------
+        >>> overlay.pos_in_rectangle((50, 50), 40, 40, 60, 60)
+        True
+        """
+
+        top_left_x = min(left, right)
+        top_left_y = min(top, bottom)
+        bottom_right_x = max(left, right)
+        bottom_right_y = max(top, bottom)
+
+        if top_left_x <= pos[0] <= bottom_right_x and top_left_y <= pos[1] <= bottom_right_y:
+            return True
+        return False
+
     def handle_events(self) -> bool:
         """
         Handles pygame events and returns whether the main loop should continue.
@@ -596,11 +706,21 @@ class ActionOverlay:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    return False
-            return True
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1: # Left mouse click
+                        for ad in self.ads[:]:
+                            right = ad["Position"][0] + self.ad_width
+                            top = ad["Position"][1]
+
+                            left = right - self.ad_button_width
+                            bottom = top - self.ad_button_height
+
+                            if self.pos_in_rectangle(event.pos, left, top, right, bottom):
+                                with self.lock:
+                                    self.ads.remove(ad)
         except Exception as e:
             print(f"Error handling events: {e}")
-            return False
+            self.running = False
 
     def render(self) -> None:
         """
@@ -614,21 +734,23 @@ class ActionOverlay:
             current_time = time.time()
             with self.lock:
                 self.lines_of_text = [(text, t) for text, t in self.lines_of_text if current_time - t < (self.TEXT_LIFETIME_SECONDS + self.ANIMATION_DURATION)]
-                local_lines_of_text = list(self.lines_of_text)
+                local_lines_of_text = self.lines_of_text[:]
+
+                local_ads = self.ads[:]
 
             # Fill the screen with a color (RGB)
-            self.screen.fill(self.WINDOW_BG_COLOR)  # Must be black background
+            self.screen.fill(self.WINDOW_BG_COLOR) # Must be black background
 
             # Render text on the screen with rounded border
             font = pygame.font.Font(None, self.FONT_SIZE)
-            text_y = self.window_height - self.TEXT_LINE_HEIGHT
+            text_y = self.text_window_height - self.TEXT_LINE_HEIGHT
             for line, t in reversed(local_lines_of_text):
                 elapsed_time = current_time - t
 
                 # Calculate the text x position based on elapsed time
                 if elapsed_time > self.TEXT_LIFETIME_SECONDS:
                     animation_progress = (elapsed_time - self.TEXT_LIFETIME_SECONDS) / self.ANIMATION_DURATION
-                    text_x = int(self.TEXT_PADDING_X - self.window_width * animation_progress)
+                    text_x = int(self.TEXT_PADDING_X - self.text_window_width * animation_progress)
                 else:
                     text_x = self.TEXT_PADDING_X
 
@@ -648,6 +770,9 @@ class ActionOverlay:
 
                 # Adjust y position for next line
                 text_y -= self.TEXT_LINE_HEIGHT  # Increase the spacing between lines
+
+            for ad in local_ads:
+                self.screen.blit(ad["Surface"], ad["Position"])
 
             # Update the display
             pygame.display.flip()
@@ -688,6 +813,8 @@ def main():
 
     overlay = ActionOverlay(events)
 
+    overlay.add_ads(3)
+
     while True:
         fulfilled_action_ids = ActionsHandler.get_fulfilled_action_ids()
 
@@ -721,7 +848,8 @@ def main():
         if actions_executed or edit_made:
             ActionsHandler.save()
 
-        running = overlay.handle_events()
+        overlay.handle_events()
+        running = overlay.is_running()
         if not running:
             sys.exit(0)
 
