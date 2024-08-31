@@ -3,6 +3,7 @@ import win32gui
 import win32ui
 import win32con
 import time
+import ctypes
 
 verbose_level = 1
 
@@ -87,6 +88,15 @@ def get_pixel_colour(pixel_pos, hwnd=None):
     win32gui.ReleaseDC(hwnd, wDC)
     return (r, g, b)
 
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+def get_mouse_state():
+    pt = POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))  # Get the cursor position
+    left_button_down = ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000  # 0x01 is the virtual key code for the left mouse button
+    return bool(left_button_down), (pt.x, pt.y)  # Returns the mouse position and state of the left button
+
 # TODO add indents
 def log_function(level):
     def decorator(func):
@@ -105,3 +115,9 @@ def log_function(level):
             return result
         return wrapper
     return decorator
+
+def main():
+    print(get_mouse_state())
+
+if __name__ == "__main__":
+    main()

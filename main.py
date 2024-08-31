@@ -34,7 +34,9 @@ MAIN_LOOP_DELAY = 0.05
 FRAME_RATE = 60
 
 ACTIONS_FILE = "actions.json"
+
 VALORANT_TITLE = "VALORANT"
+VALORANT_EXE = "VALORANT-Win64-Shipping.exe"
 
 RICK_ROLL_FILE = "Audio/Rick Roll.wav"
 
@@ -61,18 +63,16 @@ class ValorantInfo:
         return True
 
     @staticmethod
-    def get_active_window() -> str:
+    def get_active_window():
         active_window = pygetwindow.getActiveWindow()
         if active_window != None:
-            return active_window
+            return active_window.title, active_window._hWnd
         else:
-            return None
+            return None, None
 
     @classmethod
     def get_in_game(cls) -> bool:
-        window = cls.get_active_window()
-        window_name = window.title
-        window_hwnd = window._hWnd
+        window_name, window_hwnd = cls.get_active_window()
         if window_name != None and window_name.upper().strip() == VALORANT_TITLE:
             if cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(IN_GAME_PIXEL["POS"], window_hwnd), IN_GAME_PIXEL["COLOUR"], IN_GAME_PIXEL["BELOW_TOLERANCE"], IN_GAME_PIXEL["ABOVE_TOLERANCE"]):
                 return True
@@ -80,7 +80,7 @@ class ValorantInfo:
 
     @classmethod
     def get_alive(cls) -> bool:
-        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"], cls.get_active_window()._hWnd), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
+        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"], cls.get_active_window()[1]), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
             if cls.alive_last_tick:
                 return True
             else:
@@ -124,7 +124,7 @@ class Actions:
     
     @staticmethod
     def mute_game():
-        mute_game_thread = threading.Thread(target=ActionsDependancies.mute_valorant, args=(events, "VALORANT-Win64-Shipping.exe", 20))
+        mute_game_thread = threading.Thread(target=ActionsDependancies.mute_valorant, args=(events, VALORANT_EXE, 20))
         mute_game_thread.start()
         return True
     
@@ -139,23 +139,32 @@ class Actions:
         disable_wasd_thread = threading.Thread(target=ActionsDependancies.disable_buttons, args=(events, 10, ["w", "a", "s", "d"]))
         disable_wasd_thread.start()
         return True
+    
+    @staticmethod
+    def alt___f4(overlay):
+        kill_valorant_thread = threading.Thread(target=ActionsDependancies.kill_valorant, args=(overlay, 5))
+        kill_valorant_thread.start()
+        return True
+
 
 class ActionsDependancies:
     actions_next_execute_time = {}
 
     @classmethod
     @AwSnapUtil.log_function(2)
-    def execute_action(cls, action):
+    def execute_action(cls, action, overlay):
         action_function_name = action["Name"].lower().strip().replace(" ", "_").replace("+", "_")
 
         if hasattr(Actions, action_function_name):
             action_function = getattr(Actions, action_function_name)
         else:
             print(f"{action_function_name} does not exist as an available function")
-            return False # TEMPOARY NEEDS CHANGED TO FALSE (DONE?)
+            return False
 
-        result = action_function()
-
+        if action_function_name == "alt___f4":
+            result = action_function(overlay)
+        else:
+            result = action_function()
         return result
     
     @classmethod
@@ -168,7 +177,7 @@ class ActionsDependancies:
         if is_alive:
             for action in ActionsHandler.get_actions():
                 if action["Name"] not in executed_actions and (action["Name"] not in cls.actions_next_execute_time or current_time > cls.actions_next_execute_time[action["Name"]]):
-                    result = cls.execute_action(action)
+                    result = cls.execute_action(action, overlay)
 
                     if result:
                         msg = f"{action['Username']} executed {action['Name']}"
@@ -298,6 +307,20 @@ class ActionsDependancies:
             keyboard.unblock_key(key)
 
         return True
+
+    @staticmethod # THREAD
+    def kill_valorant(overlay, delay):
+        for x in range(delay):
+            overlay.add_text(f"{delay - x}...")
+            time.sleep(1)
+
+        exit_code = os.system(f'taskkill /F /IM {VALORANT_EXE}')
+
+        if exit_code == 0:
+            print("VALORANT has been forcefully closed.")
+            overlay.add_text("VALORANT forcefully closed")
+        else:
+            print(f"Error {exit_code}: Could not close VALORANT. Please check if the process is running or if the process name is correct.")
 
     @staticmethod # THREAD
     def play_audio_with_fadeout(events, file_path, duration):
@@ -504,7 +527,7 @@ class ActionOverlay:
     TEXT_COLOR = (255, 255, 255)
     TEXT_BG_COLOR = (0, 0, 20)
 
-    LIGHT_GREY = (250, 250, 250)
+    LIGHT_GREY = (230, 230, 230)
     BLACK = (1, 1, 1)
 
     # Text padding
@@ -515,9 +538,9 @@ class ActionOverlay:
 
     # Ads
     AD_WIDTH = 0.4
-    AD_HEIGHT = 0.3
+    AD_HEIGHT = 0.35
 
-    AD_BORDER = 2 #px
+    AD_BORDER = 3 #px
 
     # Text settings
     MAX_LINES = 8
@@ -540,28 +563,31 @@ class ActionOverlay:
 
         # Calculate the window position
         self.window_x = 0
-        self.window_y = 0
+        self.window_y = self.screen_height - self.text_window_height
 
         # Create the window with no frame
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.NOFRAME)
+        #self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.NOFRAME)
+        self.screen = pygame.display.set_mode((self.text_window_width, self.text_window_height), pygame.NOFRAME)
 
         # Get the window handle (HWND)
-        hwnd = pygame.display.get_wm_info()['window']
+        self.hwnd = pygame.display.get_wm_info()['window']
 
         # Set the title of the window
         pygame.display.set_caption("VSP Action Overlay")
 
         # Make the window always on top
-        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.screen_width, self.screen_height, win32con.SWP_SHOWWINDOW)
+        win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.text_window_width, self.text_window_height, win32con.SWP_SHOWWINDOW)
 
         # Make the window transparent
-        extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
-        win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
+        extended_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
+        win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
+        win32gui.SetLayeredWindowAttributes(self.hwnd, win32api.RGB(0, 0, 0), 0, win32con.LWA_COLORKEY)
 
         # Variables for text
         self.lines_of_text = []
         self.lock = threading.Lock()
+
+        self.font = pygame.font.Font(None, self.FONT_SIZE)
 
         # Variables for ads
         self.ads = []
@@ -569,13 +595,59 @@ class ActionOverlay:
         self.ad_width = round(self.screen_width * self.AD_WIDTH)
         self.ad_height = round(self.screen_height * self.AD_HEIGHT)
 
-        self.ad_button_width = min(50, self.ad_width)
-        self.ad_button_height = min(50, self.ad_height)
+        ad_button_size = 50
+        self.ad_button_width = min(ad_button_size, self.ad_width)
+        self.ad_button_height = min(ad_button_size, self.ad_height)
+
+        self.passthrough = True
+        self.previous_mouse_state = False
+
+        image_folder_path = "Images"
+        self.images = {}
+
+        img_width = self.ad_width
+        img_height = self.ad_height - self.ad_button_height
+
+        self.ad_font = pygame.font.Font(None, round(self.ad_button_height))
+
+        # Loop through all Images
+        for filename in os.listdir(image_folder_path):
+            file_path = os.path.join(image_folder_path, filename)
+            
+            if os.path.isfile(file_path) and filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+                image = pygame.image.load(file_path)
+
+                resized_image = pygame.transform.scale(image, (img_width, img_height))
+                
+                image_name = os.path.splitext(filename)[0]
+                self.images[image_name] = resized_image
 
         # Start the main loop in a separate thread
         self.running = True
         self.thread = threading.Thread(target=self.main_loop)
         self.thread.start()
+
+    def disable_clickthrough(self):
+        """Disables clickthrough, making the Pygame window clickable."""
+        with self.lock:
+            self.passthrough = False
+
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.NOFRAME)
+        win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, self.screen_width, self.screen_height, win32con.SWP_SHOWWINDOW)
+
+        extended_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
+        win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, extended_style & ~win32con.WS_EX_TRANSPARENT)
+    
+    def enable_clickthrough(self):
+        """Enables clickthrough, allowing mouse clicks to pass through the window."""
+        with self.lock:
+            self.passthrough = True
+
+        self.screen = pygame.display.set_mode((self.text_window_width, self.text_window_height), pygame.NOFRAME)
+        win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, self.window_x, self.window_y, self.text_window_width, self.text_window_height, win32con.SWP_SHOWWINDOW)
+
+        extended_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
+        win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_TRANSPARENT)
 
     def add_text(self, text: str) -> None:
         """
@@ -613,13 +685,15 @@ class ActionOverlay:
         avalable_height = self.screen_height - self.ad_height
         avalable_width = self.screen_width - self.ad_width
 
-        y_change = math.floor(avalable_height / ad_count)
-        y_random_max = y_change // ad_count
+        ad_sections = ad_count + 1
+
+        y_change = math.floor(avalable_height / ad_sections)
+        y_random_max = 2 * y_change // ad_sections
         y_positions = []
         y = random.randint(0, y_random_max)
 
-        x_change = math.floor(avalable_width / ad_count)
-        x_random_max = x_change // ad_count
+        x_change = math.floor(avalable_width / ad_sections)
+        x_random_max = 2 * x_change // ad_count
         x_positions = []
         x = random.randint(0, x_random_max)
 
@@ -639,11 +713,24 @@ class ActionOverlay:
 
             surface = pygame.Surface((self.ad_width, self.ad_height))
             surface.fill(self.LIGHT_GREY)
+
+            left = self.ad_width - self.ad_button_width
+
+            ad_description, ad_image = random.choice(list(self.images.items()))
+
+            surface.blit(ad_image, (0, self.ad_button_height))
+
+            text_surface = self.ad_font.render(ad_description, True, self.BLACK)
+            surface.blit(text_surface, (self.ad_button_width * 0.2, self.ad_button_height * 0.2))
+
+            pygame.draw.rect(surface, (255, 8, 8), (left, 0, self.ad_button_width, self.ad_button_height))
             pygame.draw.rect(surface, self.BLACK, (0, 0, self.ad_width, self.ad_height), self.AD_BORDER)
 
             ad = {"Position": (x, y), "Surface": surface}
 
             self.ads.append(ad)
+
+        self.disable_clickthrough()
 
     def is_running(self) -> bool:
         """
@@ -661,8 +748,10 @@ class ActionOverlay:
         True
         """
 
-        return self.running
+        with self.lock:
+            return self.running
 
+    @staticmethod
     def pos_in_rectangle(pos, left, top, right, bottom) -> bool:
         """
         Returns whether a position is in the given rectangle.
@@ -702,25 +791,45 @@ class ActionOverlay:
         >>> running
         True
         """
+
+        with self.lock:
+            do_enable_clickthrough = not self.ads and not self.passthrough
+                
+        if do_enable_clickthrough:
+            self.enable_clickthrough()
+
         try:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self.running = False
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1: # Left mouse click
-                        for ad in self.ads[:]:
-                            right = ad["Position"][0] + self.ad_width
-                            top = ad["Position"][1]
-
-                            left = right - self.ad_button_width
-                            bottom = top - self.ad_button_height
-
-                            if self.pos_in_rectangle(event.pos, left, top, right, bottom):
-                                with self.lock:
-                                    self.ads.remove(ad)
+                    with self.lock:
+                        self.running = False
         except Exception as e:
             print(f"Error handling events: {e}")
-            self.running = False
+            with self.lock:
+                self.running = False
+
+    def handle_ads(self) -> None:
+        with self.lock:
+            ads = self.ads[:]
+
+        if not ads:
+            return
+
+        current_mouse_state, mouse_pos = AwSnapUtil.get_mouse_state()
+
+        if current_mouse_state and not self.previous_mouse_state:
+            for ad in ads:
+                right = ad["Position"][0] + self.ad_width
+                top = ad["Position"][1]
+
+                left = right - self.ad_button_width
+                bottom = top + self.ad_button_height
+
+                if self.pos_in_rectangle(mouse_pos, left, top, right, bottom):
+                    with self.lock:
+                        self.ads.remove(ad)
+
+        self.previous_mouse_state = current_mouse_state
 
     def render(self) -> None:
         """
@@ -732,6 +841,7 @@ class ActionOverlay:
         """
         try:
             current_time = time.time()
+
             with self.lock:
                 self.lines_of_text = [(text, t) for text, t in self.lines_of_text if current_time - t < (self.TEXT_LIFETIME_SECONDS + self.ANIMATION_DURATION)]
                 local_lines_of_text = self.lines_of_text[:]
@@ -742,7 +852,6 @@ class ActionOverlay:
             self.screen.fill(self.WINDOW_BG_COLOR) # Must be black background
 
             # Render text on the screen with rounded border
-            font = pygame.font.Font(None, self.FONT_SIZE)
             text_y = self.text_window_height - self.TEXT_LINE_HEIGHT
             for line, t in reversed(local_lines_of_text):
                 elapsed_time = current_time - t
@@ -755,7 +864,7 @@ class ActionOverlay:
                     text_x = self.TEXT_PADDING_X
 
                 # Render text surface
-                text_surface = font.render(line, True, self.TEXT_COLOR)  # White text
+                text_surface = self.font.render(line, True, self.TEXT_COLOR)  # White text
 
                 # Create rounded rectangle surface for text background
                 text_rect = text_surface.get_rect()
@@ -790,30 +899,41 @@ class ActionOverlay:
         try:
             while self.running:
                 if events["EXIT"].is_set():
+                    print("ActionOverlay Quit")
                     pygame.quit()
                     sys.exit(0)
+
+                self.handle_ads()
 
                 # Render the overlay
                 self.render()
 
-                # Cap the frame rate to 30 FPS (optional, adjust as needed)
+                # Cap the frame rate
                 self.clock.tick(FRAME_RATE)
         except Exception as e:
             print(f"Error in main loop: {e}")
-            self.running = False
+            with self.lock:
+                self.running = False
 
 
 def main():
-    ActionsHandler.get_saved()
-
     is_alive = False
 
     url = 'https://projectspace.nz/wrkvaxxi/ValorantStreamPoints/post/get_actions.php'
-    password = getpass.getpass('Enter password: ')
+    password_path = "C:\\Passwords\\ValorantStreamPoints.txt"
+
+    if os.path.exists(password_path):
+        with open(password_path, "r") as file:
+            password = file.read()
+        print("Password sourced from file")
+    else:
+        password = getpass.getpass('Enter password: ')
+
+    ActionsHandler.get_saved()
 
     overlay = ActionOverlay(events)
 
-    overlay.add_ads(3)
+    #overlay.add_ads(12)
 
     while True:
         fulfilled_action_ids = ActionsHandler.get_fulfilled_action_ids()
@@ -835,13 +955,11 @@ def main():
 
         edit_made = ActionsHandler.merge_new(new_actions)
 
-        if is_alive != ValorantInfo.get_alive():
-            is_alive = not is_alive
-
-            if is_alive:
-                events["is_alive"].set()
-            else:
-                events["is_alive"].clear()
+        is_alive = ValorantInfo.get_alive()
+        if is_alive:
+            events["is_alive"].set()
+        else:
+            events["is_alive"].clear()
 
         actions_executed = ActionsDependancies.execute_actions(is_alive, overlay)
         
