@@ -74,13 +74,13 @@ class ValorantInfo:
     def get_in_game(cls) -> bool:
         window_name, window_hwnd = cls.get_active_window()
         if window_name != None and window_name.upper().strip() == VALORANT_TITLE:
-            if cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(IN_GAME_PIXEL["POS"], window_hwnd), IN_GAME_PIXEL["COLOUR"], IN_GAME_PIXEL["BELOW_TOLERANCE"], IN_GAME_PIXEL["ABOVE_TOLERANCE"]):
+            if cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(IN_GAME_PIXEL["POS"]), IN_GAME_PIXEL["COLOUR"], IN_GAME_PIXEL["BELOW_TOLERANCE"], IN_GAME_PIXEL["ABOVE_TOLERANCE"]):
                 return True
         return False
 
     @classmethod
     def get_alive(cls) -> bool:
-        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"], cls.get_active_window()[1]), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
+        if cls.get_in_game() and not cls.color_within_tolerance(AwSnapUtil.get_pixel_colour(DEAD_PIXEL["POS"]), DEAD_PIXEL["COLOUR"], DEAD_PIXEL["BELOW_TOLERANCE"], DEAD_PIXEL["ABOVE_TOLERANCE"]):
             if cls.alive_last_tick:
                 return True
             else:
@@ -135,6 +135,11 @@ class Actions:
         return True
     
     @staticmethod
+    def ad_popup(overlay):
+        overlay.add_ads(9)
+        return True
+    
+    @staticmethod
     def disable_wasd():
         disable_wasd_thread = threading.Thread(target=ActionsDependancies.disable_buttons, args=(events, 10, ["w", "a", "s", "d"]))
         disable_wasd_thread.start()
@@ -144,6 +149,12 @@ class Actions:
     def alt___f4(overlay):
         kill_valorant_thread = threading.Thread(target=ActionsDependancies.kill_valorant, args=(overlay, 5))
         kill_valorant_thread.start()
+        return True
+    
+    @staticmethod
+    def shutdown(overlay):
+        shutdown_thread = threading.Thread(target=ActionsDependancies.shutdown, args=(overlay, 5))
+        shutdown_thread.start()
         return True
 
 
@@ -161,7 +172,7 @@ class ActionsDependancies:
             print(f"{action_function_name} does not exist as an available function")
             return False
 
-        if action_function_name == "alt___f4":
+        if action_function_name in ["alt___f4", "ad_popup", "shutdown"]:
             result = action_function(overlay)
         else:
             result = action_function()
@@ -311,7 +322,7 @@ class ActionsDependancies:
     @staticmethod # THREAD
     def kill_valorant(overlay, delay):
         for x in range(delay):
-            overlay.add_text(f"{delay - x}...")
+            overlay.add_text(f"Alt + F4 in {delay - x}...")
             time.sleep(1)
 
         exit_code = os.system(f'taskkill /F /IM {VALORANT_EXE}')
@@ -320,7 +331,21 @@ class ActionsDependancies:
             print("VALORANT has been forcefully closed.")
             overlay.add_text("VALORANT forcefully closed")
         else:
-            print(f"Error {exit_code}: Could not close VALORANT. Please check if the process is running or if the process name is correct.")
+            print(f"Error {exit_code}: Could not close VALORANT.")
+
+    @staticmethod # THREAD
+    def shutdown(overlay, delay):
+        for x in range(delay):
+            overlay.add_text(f"Shutdown in {delay - x}...")
+            time.sleep(1)
+
+        exit_code = os.system(f'shutdown /s /f /t 0')
+
+        if exit_code == 0:
+            print("Shutdown complete.")
+            overlay.add_text("Shutdown complete")
+        else:
+            print(f"Error {exit_code}: Could not shutdown.")
 
     @staticmethod # THREAD
     def play_audio_with_fadeout(events, file_path, duration):
@@ -724,11 +749,13 @@ class ActionOverlay:
             surface.blit(text_surface, (self.ad_button_width * 0.2, self.ad_button_height * 0.2))
 
             pygame.draw.rect(surface, (255, 8, 8), (left, 0, self.ad_button_width, self.ad_button_height))
+            pygame.draw.line(surface, self.BLACK, (left + 0.1 * self.ad_button_width, 0.1 * self.ad_button_height), (left - 0.1 * self.ad_button_width + self.ad_button_width, self.ad_button_height - 0.1 * self.ad_button_height), self.AD_BORDER)
             pygame.draw.rect(surface, self.BLACK, (0, 0, self.ad_width, self.ad_height), self.AD_BORDER)
 
             ad = {"Position": (x, y), "Surface": surface}
 
-            self.ads.append(ad)
+            with self.lock:
+                self.ads.append(ad)
 
         self.disable_clickthrough()
 
@@ -847,12 +874,21 @@ class ActionOverlay:
                 local_lines_of_text = self.lines_of_text[:]
 
                 local_ads = self.ads[:]
+                passthrough = self.passthrough
 
             # Fill the screen with a color (RGB)
             self.screen.fill(self.WINDOW_BG_COLOR) # Must be black background
 
+            for ad in local_ads:
+                self.screen.blit(ad["Surface"], ad["Position"])
+
             # Render text on the screen with rounded border
-            text_y = self.text_window_height - self.TEXT_LINE_HEIGHT
+            if passthrough:
+                text_y = self.text_window_height - self.TEXT_LINE_HEIGHT
+            else:
+                text_y = self.screen_height - self.TEXT_LINE_HEIGHT
+                self.screen.set_at(IN_GAME_PIXEL["POS"], self.WINDOW_BG_COLOR)
+
             for line, t in reversed(local_lines_of_text):
                 elapsed_time = current_time - t
 
@@ -879,9 +915,6 @@ class ActionOverlay:
 
                 # Adjust y position for next line
                 text_y -= self.TEXT_LINE_HEIGHT  # Increase the spacing between lines
-
-            for ad in local_ads:
-                self.screen.blit(ad["Surface"], ad["Position"])
 
             # Update the display
             pygame.display.flip()
@@ -933,8 +966,6 @@ def main():
 
     overlay = ActionOverlay(events)
 
-    #overlay.add_ads(12)
-
     while True:
         fulfilled_action_ids = ActionsHandler.get_fulfilled_action_ids()
 
@@ -950,8 +981,6 @@ def main():
             ActionsHandler.remove(fulfilled_action_ids)
         
         new_actions = AwSnapUtil.eval_message(response.text)
-
-        print(new_actions)
 
         edit_made = ActionsHandler.merge_new(new_actions)
 

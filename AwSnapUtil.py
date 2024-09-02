@@ -74,6 +74,7 @@ def eval_message(message):
 def get_pixel_colour(pixel_pos, hwnd=None):
     if hwnd is None:
         hwnd = win32gui.GetDesktopWindow()
+    
     wDC = win32gui.GetWindowDC(hwnd)
     dcObj = win32ui.CreateDCFromHandle(wDC)
     cDC = dcObj.CreateCompatibleDC()
