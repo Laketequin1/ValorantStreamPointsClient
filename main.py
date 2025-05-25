@@ -136,6 +136,7 @@ class Actions:
     
     @staticmethod
     def ad_popup(overlay):
+        overlay.focus_overlay()
         overlay.add_ads(9)
         return True
     
@@ -281,46 +282,46 @@ class ActionsDependancies:
     
     @staticmethod # THREAD
     def disable_buttons(events, duration, keys):
-        def exit_disable_button():
-            for key in keys:
-                keyboard.unblock_key(key)
-            return False
-
         for key in keys:
             keyboard.block_key(key)
+            keyboard.release(key)
 
-        is_alive = False
+        is_blocked = True
         INTERVAL = 0.2
+        i = 0
 
-        for _ in range(math.floor(duration / INTERVAL)):
-            if events["EXIT"].is_set():
-                exit_disable_button()
-
-            if not events["is_alive"].is_set():
-                for key in keys:
-                    keyboard.unblock_key(key)
-                is_alive = False
-
-            while not is_alive:
-                time.sleep(INTERVAL)
-
-                if events["EXIT"].is_set():
-                    exit_disable_button()
-
-                if events["is_alive"].is_set():
-                    for key in keys:
-                        keyboard.block_key(key)
-                    is_alive = True
-
+        while i <= math.floor(duration / INTERVAL):
             time.sleep(INTERVAL)
 
-        for key in keys:
-            keyboard.unblock_key(key)
+            is_alive = events["is_alive"].is_set()
+
+            if events["EXIT"].is_set():
+                break
+
+            if not is_alive:
+                if is_blocked:
+                    try:
+                        for key in keys:
+                            keyboard.unblock_key(key)
+                    except KeyError:
+                        pass
+                continue
+
+            if not is_blocked:
+                for key in keys:
+                    keyboard.block_key(key)
+
+            i += 1
+        
+        if is_blocked:
+            for key in keys:
+                keyboard.unblock_key(key)
 
         return True
 
     @staticmethod # THREAD
     def kill_valorant(overlay, delay):
+        time.sleep(1)
         for x in range(delay):
             overlay.add_text(f"Alt + F4 in {delay - x}...")
             time.sleep(1)
@@ -569,8 +570,8 @@ class ActionOverlay:
 
     # Text settings
     MAX_LINES = 8
-    TEXT_LIFETIME_SECONDS = 15
-    ANIMATION_DURATION = 0.4
+    TEXT_LIFETIME_SECONDS = 10
+    ANIMATION_DURATION = 0.5
 
     def __init__(self, events):
         """Initializes the overlay window and sets its properties."""
@@ -674,6 +675,27 @@ class ActionOverlay:
         extended_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
         win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_TRANSPARENT)
 
+    def focus_overlay(self):
+        """
+        Brings the overlay window to the foreground, makes it active,
+        ensures it's not click-through, and makes the cursor visible.
+        """
+        if not self.hwnd:
+            return False
+
+        current_extended_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
+        is_currently_transparent = bool(current_extended_style & win32con.WS_EX_TRANSPARENT)
+
+        if is_currently_transparent:
+            with self.lock:
+                self.passthrough = False 
+            win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, current_extended_style & ~win32con.WS_EX_TRANSPARENT)
+
+        win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
+        win32gui.SetFocus(self.hwnd)
+
+        return True
+
     def add_text(self, text: str) -> None:
         """
         Adds a line of text with a timestamp to the overlay.
@@ -740,6 +762,7 @@ class ActionOverlay:
             surface.fill(self.LIGHT_GREY)
 
             left = self.ad_width - self.ad_button_width
+            right = self.ad_width
 
             ad_description, ad_image = random.choice(list(self.images.items()))
 
@@ -749,7 +772,8 @@ class ActionOverlay:
             surface.blit(text_surface, (self.ad_button_width * 0.2, self.ad_button_height * 0.2))
 
             pygame.draw.rect(surface, (255, 8, 8), (left, 0, self.ad_button_width, self.ad_button_height))
-            pygame.draw.line(surface, self.BLACK, (left + 0.1 * self.ad_button_width, 0.1 * self.ad_button_height), (left - 0.1 * self.ad_button_width + self.ad_button_width, self.ad_button_height - 0.1 * self.ad_button_height), self.AD_BORDER)
+            pygame.draw.line(surface, self.BLACK, (left + 0.1 * self.ad_button_width, 0.1 * self.ad_button_height), (left - 0.1 * self.ad_button_width + self.ad_button_width - self.AD_BORDER, self.ad_button_height - 0.1 * self.ad_button_height), self.AD_BORDER * 2)
+            pygame.draw.line(surface, self.BLACK, (left - 0.1 * self.ad_button_width + self.ad_button_width - self.AD_BORDER, 0.1 * self.ad_button_height), (left + 0.1 * self.ad_button_width, self.ad_button_height - 0.1 * self.ad_button_height), self.AD_BORDER * 2)
             pygame.draw.rect(surface, self.BLACK, (0, 0, self.ad_width, self.ad_height), self.AD_BORDER)
 
             ad = {"Position": (x, y), "Surface": surface}
@@ -985,6 +1009,7 @@ def main():
         edit_made = ActionsHandler.merge_new(new_actions)
 
         is_alive = ValorantInfo.get_alive()
+        print(is_alive)
         if is_alive:
             events["is_alive"].set()
         else:
